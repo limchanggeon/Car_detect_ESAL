@@ -10,8 +10,22 @@ CCTV Multi-Stream Detector (PyQt5 PoC)
    source .venv/bin/activate
 
 2. 의존성 설치
-   python3 -m pip install --upgrade pip
-   python3 -m pip install -r requirements-gui.txt
+
+   권장: 먼저 PyTorch(특히 GPU/CUDA를 사용하는 경우)는 공식 설치 가이드를 따릅니다:
+
+```bash
+# 예: CPU-only 간단 설치
+python3 -m pip install --upgrade pip
+python3 -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+```
+
+   그 다음 저장소 의존성 설치:
+
+```bash
+python3 -m pip install -r requirements-gui.txt
+```
+
+   참고: `ultralytics` 패키지는 내부적으로 `torch`를 필요로 합니다. GPU 가속을 사용하려면 적절한 CUDA 버전의 `torch`를 미리 설치하세요.
 
 3. 앱 실행
    python3 gui_cctv.py weights/best.pt
