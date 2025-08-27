@@ -53,6 +53,75 @@ KOREAN_LABEL_MAP = {
     'trailer': '트레일러',
 }
 
+# 차량별 점수(ESALF/점수 기준)
+# 사용자 요청: 점수 매핑만 아래 값으로 교체
+SCORE_MAP = {
+    'bicycle': 0,
+    'person': 0,
+    'people': 0,
+    'car': 1,
+    'cars': 1,
+    'suv': 1,
+    'motorbike': 1,
+    'motorcycle': 1,
+    'bike': 1,
+    'van': 150,
+    'work_van': 7950,
+    'caravan': 7950,
+    'bus': 10430,
+    'construction_vehicle': 24820,
+    'trailer': 24820,
+    'truck': 25160,
+}
+
+# 보수 기준 임계값 (누적 ESAL 기준)
+# 사용자 제공 표에 따라 누적 ESAL로 보수 단계 구분
+# 기존 코드와의 호환성을 위해 (threshold, message) 형태를 유지합니다.
+MAINTENANCE_THRESHOLDS = [
+    (1_000_000, '전면재포장 (설계 대비 100%, 20년 후)'),
+    (850_000, '중간보수 (설계 대비 85%, 17년 후)'),
+    (700_000, '표층보수 (설계 대비 70%, 14년 후)'),
+    (500_000, '예방보수 (설계 대비 50%, 10년 후)'),
+]
+
+# 상세 보수 일정/설계 대비 정보를 기계적으로 사용하기 위한 보조 데이터 구조
+MAINTENANCE_SCHEDULE = [
+    {
+        'stage': '예방보수',
+        'cumulative_esal': 500_000,
+        'design_pct': 50,
+        'timing_years': 10,
+        'note': '예방적 유지보수 (균열 실링, 표면 처리)'
+    },
+    {
+        'stage': '표층보수',
+        'cumulative_esal': 700_000,
+        'design_pct': 70,
+        'timing_years': 14,
+        'note': '표층 보수 (5cm 절삭 후 재포장)'
+    },
+    {
+        'stage': '중간보수',
+        'cumulative_esal': 850_000,
+        'design_pct': 85,
+        'timing_years': 17,
+        'note': '중간층 보수 (10cm 절삭 후 재포장)'
+    },
+    {
+        'stage': '전면재포장',
+        'cumulative_esal': 1_000_000,
+        'design_pct': 100,
+        'timing_years': 20,
+        'note': '전면 재포장 (20cm 기층까지 재포장)'
+    },
+]
+
+# 장기 누적 관리 임계값 (예시)
+LONG_TERM = {
+    'monthly': 123000,
+    'yearly': 1496500,
+}
+
 # --- DEBUG: detect any QWidget/QLabel/QRubberBand instantiation before QApplication is created ---
 import traceback as _traceback
 _orig_qwidget_init = QtWidgets.QWidget.__init__
@@ -438,6 +507,7 @@ class VideoLabel(QtWidgets.QLabel):
 class StreamPanel(QtWidgets.QWidget):
     def __init__(self, source: str, model_path: str):
         super().__init__()
+        # basic properties
         self.source = source
         self.model_path = model_path
         self.roi = None
@@ -446,7 +516,7 @@ class StreamPanel(QtWidgets.QWidget):
         self.imgsz = 640
         self.conf = 0.25
 
-        # 기본 레이아웃
+        # layout
         self.layout = QtWidgets.QVBoxLayout()
         self.layout.setContentsMargins(8, 8, 8, 8)
         self.layout.setSpacing(6)
@@ -491,6 +561,11 @@ class StreamPanel(QtWidgets.QWidget):
         self.breakdown_label = QtWidgets.QLabel("")
         self.breakdown_label.setWordWrap(True)
         self.layout.addWidget(self.breakdown_label)
+
+        # score display (총합 및 권고)
+        self.score_label = QtWidgets.QLabel("")
+        self.score_label.setWordWrap(True)
+        self.layout.addWidget(self.score_label)
 
         # connect video ROI signal
         self.video.roi_changed.connect(self.on_roi_changed)
@@ -548,10 +623,50 @@ class StreamPanel(QtWidgets.QWidget):
                 total = int(counts) if counts is not None else 0
                 self.count_label.setText(f"카운트: {total}")
                 return
+            # 기존 총 카운트 표시
             total = sum(counts.values())
             self.count_label.setText(f"카운트: {total}")
-            parts = [f"{k}: {v}" for k, v in sorted(counts.items(), key=lambda x: (-x[1], x[0]))]
-            self.breakdown_label.setText(', '.join(parts))
+
+            # SCORE_MAP에 따라 클래스별 소계(subtotal)와 총점(total_score) 계산
+            total_score = 0.0
+            breakdown_parts = []
+            per_class_details = []
+            for k, v in sorted(counts.items(), key=lambda x: (-x[1], x[0])):
+                name = str(k).lower()
+                # find matching score key
+                score_per = SCORE_MAP.get(name)
+                if score_per is None:
+                    for key_candidate in SCORE_MAP.keys():
+                        if key_candidate in name:
+                            score_per = SCORE_MAP.get(key_candidate)
+                            break
+                if score_per is None:
+                    score_per = 0.0
+
+                class_count = int(v)
+                subtotal = class_count * float(score_per)
+                total_score += subtotal
+
+                # human readable label (KOREAN_LABEL_MAP may map english keys)
+                human = KOREAN_LABEL_MAP.get(name, name)
+                per_class_details.append((human, name, class_count, score_per, subtotal))
+                breakdown_parts.append(f"{human}({name}): {class_count} × {score_per} = {subtotal:.1f}")
+
+            # determine maintenance recommendation based on total_score
+            rec = None
+            for thresh, msg in sorted(MAINTENANCE_THRESHOLDS, key=lambda x: -x[0]):
+                if total_score >= thresh:
+                    rec = msg
+                    break
+            if rec is None:
+                rec = '정기 모니터링' if total_score > 0 else '조치 불필요'
+
+            # 표시: breakdown_label에는 각 클래스 소계, score_label에는 총합 및 권고
+            self.breakdown_label.setText('\n'.join(breakdown_parts))
+            try:
+                self.score_label.setText(f"총점: {total_score:.1f} | 권고: {rec}")
+            except Exception:
+                pass
         except Exception:
             pass
 
