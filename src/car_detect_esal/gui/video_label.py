@@ -19,7 +19,7 @@ class VideoLabel(QtWidgets.QLabel):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.setAlignment(QtCore.Qt.AlignCenter)
-        # 현대적 비디오 디스플레이 스타일링 with gradient borders
+        # 현대적 비디오 디스플레이 스타일링 with gradient borders and 한글 폰트 지원
         self.setStyleSheet("""
             VideoLabel {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
@@ -29,6 +29,7 @@ class VideoLabel(QtWidgets.QLabel):
                 color: #ecf0f1;
                 font-size: 15px;
                 font-weight: 600;
+                font-family: "SF Pro Display", "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
             }
             VideoLabel:hover {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:1,

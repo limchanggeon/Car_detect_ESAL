@@ -31,7 +31,7 @@ class StreamPanel(QtWidgets.QWidget):
         self.layout.setSpacing(8)
         self.setLayout(self.layout)
         
-        # 프리미엄 카드 디자인 with glassmorphism effects
+        # 프리미엄 카드 디자인 with glassmorphism effects and 한글 폰트 지원
         self.setStyleSheet("""
             StreamPanel {
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
@@ -40,6 +40,7 @@ class StreamPanel(QtWidgets.QWidget):
                 border: 2px solid rgba(255, 255, 255, 0.3);
                 margin: 10px;
                 padding: 20px;
+                font-family: "SF Pro Display", "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
             }
             StreamPanel:hover {
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
@@ -55,6 +56,7 @@ class StreamPanel(QtWidgets.QWidget):
                 border-radius: 8px;
                 font-weight: 600;
                 font-size: 12px;
+                font-family: "SF Pro Display", "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
                 min-height: 25px;
             }
             QPushButton:hover {
@@ -81,11 +83,8 @@ class StreamPanel(QtWidgets.QWidget):
             QLabel {
                 font-size: 18px;
                 font-weight: 800;
+                font-family: "SF Pro Display", "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
                 color: #2c3e50;
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #667eea, stop:1 #764ba2);
-                -webkit-background-clip: text;
-                color: transparent;
                 padding: 10px;
                 border-radius: 10px;
                 text-align: center;
@@ -112,6 +111,7 @@ class StreamPanel(QtWidgets.QWidget):
                 padding: 10px 20px;
                 font-weight: 600;
                 font-size: 12px;
+                font-family: "SF Pro Display", "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
             }
             QPushButton:hover {
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
@@ -142,8 +142,7 @@ class StreamPanel(QtWidgets.QWidget):
             QLabel {
                 font-size: 32px;
                 font-weight: 800;
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #667eea, stop:1 #764ba2);
+                font-family: "SF Pro Display", "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
                 color: #667eea;
                 text-align: center;
                 padding: 15px;
@@ -163,6 +162,7 @@ class StreamPanel(QtWidgets.QWidget):
                 padding: 8px 16px;
                 font-weight: 600;
                 font-size: 11px;
+                font-family: "SF Pro Display", "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
             }
             QPushButton:hover {
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,

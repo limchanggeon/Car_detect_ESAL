@@ -62,33 +62,35 @@ class MainWindow(QtWidgets.QMainWindow):
         layout.setSpacing(10)
         layout.setContentsMargins(15, 15, 15, 15)
 
-        # 현대적이고 아름다운 애플리케이션 스타일
+        # 현대적이고 아름다운 애플리케이션 스타일 with 한글 폰트 지원
         self.setStyleSheet("""
             QMainWindow {
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
                     stop:0 #667eea, stop:1 #764ba2);
                 color: #2c3e50;
+                font-family: "SF Pro Display", "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
             }
             QGroupBox {
                 font-weight: 600;
                 font-size: 14px;
+                font-family: "SF Pro Display", "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
                 border: 2px solid rgba(255, 255, 255, 0.2);
                 border-radius: 15px;
                 margin: 15px 5px;
                 padding-top: 15px;
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
                     stop:0 rgba(255, 255, 255, 0.95), stop:1 rgba(248, 250, 252, 0.9));
-                box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
                 left: 20px;
                 padding: 5px 15px;
                 color: white;
+                font-family: "SF Pro Display", "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
+                font-weight: bold;
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
                     stop:0 #667eea, stop:1 #764ba2);
                 border-radius: 10px;
-                font-weight: bold;
             }
             QPushButton {
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
@@ -99,12 +101,12 @@ class MainWindow(QtWidgets.QMainWindow):
                 padding: 10px 20px;
                 font-weight: 600;
                 font-size: 13px;
+                font-family: "SF Pro Display", "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
                 min-height: 25px;
             }
             QPushButton:hover {
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
                     stop:0 #5a6fd8, stop:1 #6a4c93);
-                transform: translateY(-2px);
             }
             QPushButton:pressed {
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
@@ -121,6 +123,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 background: white;
                 min-height: 20px;
                 font-size: 13px;
+                font-family: "SF Pro Display", "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
             }
             QComboBox:focus {
                 border-color: #667eea;
@@ -130,7 +133,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 width: 20px;
             }
             QComboBox::down-arrow {
-                image: none;
                 border-left: 5px solid transparent;
                 border-right: 5px solid transparent;
                 border-top: 8px solid #667eea;
@@ -143,6 +145,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 background: white;
                 min-height: 20px;
                 font-size: 13px;
+                font-family: "SF Pro Display", "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
             }
             QSpinBox:focus, QDoubleSpinBox:focus {
                 border-color: #667eea;
@@ -151,6 +154,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 color: #2c3e50;
                 font-size: 13px;
                 font-weight: 500;
+                font-family: "SF Pro Display", "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
             }
             QScrollArea {
                 border: none;
