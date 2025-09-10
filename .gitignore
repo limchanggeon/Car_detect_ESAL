@@ -24,10 +24,12 @@ nose2-junit.xml
 coverage.xml
 
 # Virtual environments
+.venv/
 venv/
 env/
 ENV/
 env.bak/
+venv.bak/
 
 # macOS
 .DS_Store
