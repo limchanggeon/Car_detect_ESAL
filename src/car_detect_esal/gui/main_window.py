@@ -390,7 +390,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 color: #2c3e50;
             }
         """)
-        self._update_performance_info()
         
         # FPS 목표 표시
         fps_layout = QtWidgets.QVBoxLayout()
@@ -411,6 +410,9 @@ class MainWindow(QtWidgets.QMainWindow):
             }
         """)
         fps_layout.addWidget(self.fps_target_label)
+        
+        # 이제 정보 업데이트 (모든 위젯이 생성된 후)
+        self._update_performance_info()
         
         # 적용 버튼
         self.apply_perf_btn = QtWidgets.QPushButton("✅ 설정 적용")
