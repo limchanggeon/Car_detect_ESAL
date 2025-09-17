@@ -39,9 +39,9 @@ class VideoLabel(QtWidgets.QLabel):
             }
         """)
         
-        # 640x640 고정 크기로 설정 (YOLO 모델 최적화)
-        self.setMinimumSize(640, 640)
-        self.setMaximumSize(640, 640)
+        # 더 큰 고정 크기로 설정 (탐지화면이 잘리지 않도록)
+        self.setMinimumSize(800, 600)
+        self.setMaximumSize(1200, 900)
         
         # 위젯이 가능한 공간을 넓게 차지하도록 확장 정책 설정
         self.setSizePolicy(
@@ -74,10 +74,10 @@ class VideoLabel(QtWidgets.QLabel):
         # store original frame size
         self._orig_size = (qimg.width(), qimg.height())
         
-        # 고정 640x640 해상도로 스케일링 (속도 최적화)
-        target_size = QtCore.QSize(640, 640)
+        # 탐지화면 중심으로 더 큰 크기로 스케일링
+        # 위젯 크기에 맞춰 aspect ratio 유지하며 스케일링
         pix = QtGui.QPixmap.fromImage(qimg).scaled(
-            target_size, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation
+            self.size(), QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation
         )
         self._disp_size = (pix.width(), pix.height())
         

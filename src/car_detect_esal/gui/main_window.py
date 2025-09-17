@@ -47,8 +47,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.panels = []
         self._cols = 2
         
-        # 현재 성능 설정
-        self.current_performance_preset = "balanced"
+        # 현재 성능 설정 (나노모델을 위해 fast를 기본으로)
+        self.current_performance_preset = "fast"
         
         self._setup_ui()
         self._load_default_model()
@@ -57,14 +57,26 @@ class MainWindow(QtWidgets.QMainWindow):
         """UI 구성 요소 설정"""
         self.setWindowTitle("🚗 Car Detection ESAL Analysis System v1.0")
         self.setWindowIcon(self._create_app_icon())
-        self.resize(*self.config.DEFAULT_WINDOW_SIZE)
+        # 탐지화면 중심의 더 큰 창 크기로 설정
+        self.resize(1400, 1000)
         
-        # 메인 위젯과 레이아웃
+        # 메인 위젯과 수평 레이아웃 (탐지화면 중심)
         central = QtWidgets.QWidget()
         self.setCentralWidget(central)
-        layout = QtWidgets.QVBoxLayout(central)
-        layout.setSpacing(10)
-        layout.setContentsMargins(15, 15, 15, 15)
+        main_layout = QtWidgets.QHBoxLayout(central)
+        main_layout.setSpacing(15)
+        main_layout.setContentsMargins(10, 10, 10, 10)
+        
+        # 왼쪽: 탐지 화면 영역 (메인)
+        left_widget = QtWidgets.QWidget()
+        left_layout = QtWidgets.QVBoxLayout(left_widget)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # 오른쪽: 컨트롤 패널 (고정 폭)
+        right_widget = QtWidgets.QWidget()
+        right_widget.setFixedWidth(400)  # 고정 폭으로 설정
+        right_layout = QtWidgets.QVBoxLayout(right_widget)
+        right_layout.setContentsMargins(0, 0, 0, 0)
 
         # 현대적이고 아름다운 애플리케이션 스타일 with 한글 폰트 지원
         self.setStyleSheet("""
@@ -181,17 +193,17 @@ class MainWindow(QtWidgets.QMainWindow):
             }
         """)
         
-        # 상단 컨트롤 패널
-        self._create_control_panel(layout)
+        # 컨트롤 패널들을 오른쪽에 배치
+        self._create_control_panel(right_layout)
+        self._create_settings_panel(right_layout)
+        self._create_performance_panel(right_layout)
         
-        # 설정 패널
-        self._create_settings_panel(layout)
+        # 탐지 화면 영역을 왼쪽에 배치 (메인)
+        self._create_stream_area(left_layout)
         
-        # 성능 설정 패널
-        self._create_performance_panel(layout)
-        
-        # 스트림 패널 영역
-        self._create_stream_area(layout)
+        # 레이아웃에 위젯들 추가
+        main_layout.addWidget(left_widget, 3)   # 탐지화면이 더 넓게
+        main_layout.addWidget(right_widget, 1)  # 컨트롤 패널은 좁게
 
     def _create_app_icon(self):
         """애플리케이션 아이콘 생성"""
@@ -350,9 +362,9 @@ class MainWindow(QtWidgets.QMainWindow):
             preset_info = PerformanceConfig.get_preset(preset_name)
             self.perf_combo.addItem(f"{preset_info['name']}", preset_name)
         
-        # 기본값을 "balanced"로 설정
+        # 기본값을 "fast"로 설정 (나노모델에 더 적합)
         for i in range(self.perf_combo.count()):
-            if self.perf_combo.itemData(i) == "balanced":
+            if self.perf_combo.itemData(i) == "fast":
                 self.perf_combo.setCurrentIndex(i)
                 break
         

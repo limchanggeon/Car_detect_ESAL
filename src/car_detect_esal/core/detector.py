@@ -64,7 +64,10 @@ class VehicleDetector:
                     conf=self.conf,
                     verbose=False,
                     device='cpu',
-                    half=False
+                    half=False,
+                    max_det=100,
+                    agnostic_nms=True,
+                    augment=False
                 )
                 
                 try:
@@ -78,14 +81,17 @@ class VehicleDetector:
                 except Exception:
                     annotated = frame
             else:
-                # 최적화 옵션 추가: verbose=False, device='cpu', half=False
+                # 나노모델 최적화: 더 공격적인 최적화 옵션
                 results = self.model(
                     frame, 
                     imgsz=self.imgsz, 
                     conf=self.conf,
                     verbose=False,
-                    device='cpu',  # CPU 사용 명시
-                    half=False     # FP16 비활성화 (안정성)
+                    device='cpu',
+                    half=False,
+                    max_det=100,    # 최대 탐지 수 제한
+                    agnostic_nms=True,  # 클래스 무관 NMS (더 빠름)
+                    augment=False   # 증강 비활성화 (속도 향상)
                 )
                 annotated = results[0].plot()
                 
