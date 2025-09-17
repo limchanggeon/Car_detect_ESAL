@@ -506,8 +506,12 @@ class MainWindow(QtWidgets.QMainWindow):
                 # 실행 중인 스트림들에 새 설정 적용
                 for panel in self.panels:
                     panel.detector = self.detector
-                    if hasattr(panel.worker, 'detector'):
-                        panel.worker.detector = self.detector
+                    panel.performance_config = preset  # 성능 설정도 업데이트
+                    
+                    # 워커가 실행 중이면 새로운 설정으로 재시작
+                    if hasattr(panel, 'worker') and panel.worker and panel.worker.isRunning():
+                        panel.stop()  # 기존 워커 중지
+                        QtCore.QTimer.singleShot(500, panel.start)  # 0.5초 후 새 설정으로 재시작
                 
                 QtWidgets.QMessageBox.information(
                     self, "설정 적용 완료",
@@ -549,8 +553,16 @@ class MainWindow(QtWidgets.QMainWindow):
         model_path = Path(self.model_line.text().strip())
         if model_path.exists():
             try:
-                self.detector = VehicleDetector(str(model_path))
-                print(f"[GUI] 기본 모델 로드 완료: {model_path}")
+                # 현재 성능 설정을 사용해서 모델 로드
+                from ..core.performance_config import PerformanceConfig
+                preset = PerformanceConfig.get_preset(self.current_performance_preset)
+                
+                self.detector = VehicleDetector(
+                    str(model_path),
+                    imgsz=preset['imgsz'],
+                    conf=preset['conf']
+                )
+                print(f"[GUI] 기본 모델 로드 완료: {model_path} (성능설정: {self.current_performance_preset})")
             except Exception as e:
                 print(f"[GUI] 기본 모델 로드 실패: {e}")
 
@@ -574,9 +586,21 @@ class MainWindow(QtWidgets.QMainWindow):
             return
             
         try:
-            self.detector = VehicleDetector(str(model_path))
+            # 현재 성능 설정으로 모델 로드
+            from ..core.performance_config import PerformanceConfig
+            preset = PerformanceConfig.get_preset(self.current_performance_preset)
+            
+            self.detector = VehicleDetector(
+                str(model_path),
+                imgsz=preset['imgsz'],
+                conf=preset['conf']
+            )
             QtWidgets.QMessageBox.information(
-                self, "모델 로드", f"모델 로드 완료: {model_path.name}"
+                self, "모델 로드", 
+                f"모델 로드 완료: {model_path.name}\n"
+                f"성능 설정: {preset['name']}\n"
+                f"해상도: {preset['imgsz']}x{preset['imgsz']}\n"
+                f"신뢰도: {preset['conf']}"
             )
         except Exception as e:
             QtWidgets.QMessageBox.critical(

@@ -92,10 +92,9 @@ class StreamPanel(QtWidgets.QWidget):
         """)
         self.layout.addWidget(self.title_label)
 
-        # 비디오 영역 (더 큰 크기로 탐지화면 중심)
+        # 비디오 영역 (고정 크기 800x600)
         self.video = VideoLabel()
-        # 고정 크기 대신 최소 크기만 설정하여 유연성 확보
-        self.video.setMinimumSize(800, 600)
+        # VideoLabel이 이미 setFixedSize(800, 600)로 설정되어 있음
         self.layout.addWidget(self.video, alignment=QtCore.Qt.AlignCenter)
 
         # 컨트롤 버튼들
@@ -200,35 +199,84 @@ class StreamPanel(QtWidgets.QWidget):
         
         counter_layout.addLayout(count_info_layout)
 
-        # 상세 분석 영역
+        # 상세 분석 영역 (스크롤 뷰 추가)
+        analysis_scroll = QtWidgets.QScrollArea()
+        analysis_scroll.setWidgetResizable(True)
+        analysis_scroll.setMaximumHeight(120)  # 높이 제한
+        analysis_scroll.setStyleSheet("""
+            QScrollArea {
+                background: #f9f9f9;
+                border: 1px solid #eee;
+                border-radius: 4px;
+            }
+            QScrollBar:vertical {
+                background: #e0e0e0;
+                width: 10px;
+                border-radius: 5px;
+            }
+            QScrollBar::handle:vertical {
+                background: #bdbdbd;
+                border-radius: 5px;
+                min-height: 20px;
+            }
+        """)
+        
+        analysis_widget = QtWidgets.QWidget()
+        analysis_layout = QtWidgets.QVBoxLayout(analysis_widget)
+        
         self.breakdown_label = QtWidgets.QLabel("상세 분석이 여기에 표시됩니다")
         self.breakdown_label.setWordWrap(True)
         self.breakdown_label.setStyleSheet("""
             QLabel {
-                background: #f9f9f9;
-                border: 1px solid #eee;
-                border-radius: 4px;
+                background: transparent;
                 padding: 8px;
                 font-family: monospace;
                 font-size: 11px;
+                color: #333;
             }
         """)
-        counter_layout.addWidget(self.breakdown_label)
+        analysis_layout.addWidget(self.breakdown_label)
+        analysis_scroll.setWidget(analysis_widget)
+        counter_layout.addWidget(analysis_scroll)
 
-        # ESAL 점수 및 권고사항
+        # ESAL 점수 및 권고사항 (스크롤 뷰 추가)
+        score_scroll = QtWidgets.QScrollArea()
+        score_scroll.setWidgetResizable(True) 
+        score_scroll.setMaximumHeight(100)  # 높이 제한
+        score_scroll.setStyleSheet("""
+            QScrollArea {
+                background: #e8f5e8;
+                border: 2px solid #4CAF50;
+                border-radius: 4px;
+            }
+            QScrollBar:vertical {
+                background: #c8e6c9;
+                width: 10px;
+                border-radius: 5px;
+            }
+            QScrollBar::handle:vertical {
+                background: #4CAF50;
+                border-radius: 5px;
+                min-height: 20px;
+            }
+        """)
+        
+        score_widget = QtWidgets.QWidget()
+        score_layout = QtWidgets.QVBoxLayout(score_widget)
+        
         self.score_label = QtWidgets.QLabel("ESAL 분석 결과가 여기에 표시됩니다")
         self.score_label.setWordWrap(True)
         self.score_label.setStyleSheet("""
             QLabel {
-                background: #e8f5e8;
-                border: 2px solid #4CAF50;
-                border-radius: 4px;
+                background: transparent;
                 padding: 8px;
                 font-weight: bold;
                 color: #2e7d32;
             }
         """)
-        counter_layout.addWidget(self.score_label)
+        score_layout.addWidget(self.score_label)
+        score_scroll.setWidget(score_widget)
+        counter_layout.addWidget(score_scroll)
         
         self.layout.addWidget(counter_frame)
 
