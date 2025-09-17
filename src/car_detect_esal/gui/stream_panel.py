@@ -92,9 +92,10 @@ class StreamPanel(QtWidgets.QWidget):
         """)
         self.layout.addWidget(self.title_label)
 
-        # 비디오 영역
+        # 비디오 영역 (640x640 고정)
         self.video = VideoLabel()
-        self.layout.addWidget(self.video)
+        self.video.setFixedSize(640, 640)  # 고정 크기로 설정
+        self.layout.addWidget(self.video, alignment=QtCore.Qt.AlignCenter)
 
         # 컨트롤 버튼들
         control_layout = QtWidgets.QHBoxLayout()

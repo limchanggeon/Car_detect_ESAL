@@ -73,8 +73,8 @@ class StreamWorker(QtCore.QThread):
                 total_count = self.tracker.count
                 self.status.emit(f"실행 중 | 프레임: {frame_count} | 카운트: {total_count}")
             
-            # 적절한 프레임레이트 유지
-            time.sleep(0.033)  # ~30 FPS
+            # 적절한 프레임레이트 유지 (처리 속도 최적화)
+            time.sleep(0.1)  # ~10 FPS (탐지 속도 향상)
 
         cap.release()
         self.status.emit("중지됨")
@@ -82,6 +82,13 @@ class StreamWorker(QtCore.QThread):
     def _process_frame(self, frame) -> any:
         """프레임 처리 및 차량 탐지"""
         try:
+            import cv2
+            
+            # 프레임을 640x640으로 리사이즈 (속도 최적화)
+            h, w = frame.shape[:2]
+            if w != 640 or h != 640:
+                frame = cv2.resize(frame, (640, 640), interpolation=cv2.INTER_LINEAR)
+            
             # 탐지 수행
             annotated, results = self.detector.detect(frame, self.roi)
             

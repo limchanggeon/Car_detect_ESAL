@@ -16,10 +16,10 @@ except ImportError:
 class VehicleDetector:
     """YOLOv8 기반 차량 탐지 클래스"""
     
-    def __init__(self, model_path: str, imgsz: int = 640, conf: float = 0.25):
+    def __init__(self, model_path: str, imgsz: int = 640, conf: float = 0.5):
         self.model_path = model_path
         self.imgsz = imgsz
-        self.conf = conf
+        self.conf = conf  # 더 높은 confidence로 불필요한 탐지 줄임
         self.model = None
         self._load_model()
     
@@ -58,7 +58,14 @@ class VehicleDetector:
                 h = max(1, min(int(h), h_frame - y))
                 
                 crop = frame[y:y+h, x:x+w]
-                results = self.model(crop, imgsz=self.imgsz, conf=self.conf)
+                results = self.model(
+                    crop, 
+                    imgsz=self.imgsz, 
+                    conf=self.conf,
+                    verbose=False,
+                    device='cpu',
+                    half=False
+                )
                 
                 try:
                     annotated_crop = results[0].plot()
@@ -71,7 +78,15 @@ class VehicleDetector:
                 except Exception:
                     annotated = frame
             else:
-                results = self.model(frame, imgsz=self.imgsz, conf=self.conf)
+                # 최적화 옵션 추가: verbose=False, device='cpu', half=False
+                results = self.model(
+                    frame, 
+                    imgsz=self.imgsz, 
+                    conf=self.conf,
+                    verbose=False,
+                    device='cpu',  # CPU 사용 명시
+                    half=False     # FP16 비활성화 (안정성)
+                )
                 annotated = results[0].plot()
                 
             return annotated, results
