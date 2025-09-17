@@ -20,17 +20,28 @@ class StreamWorker(QtCore.QThread):
     status = QtCore.pyqtSignal(str)
     count_changed = QtCore.pyqtSignal(object)  # Dict[str, int]
 
-    def __init__(self, source: str, detector: VehicleDetector):
+    def __init__(self, source: str, detector: VehicleDetector, performance_config: dict = None):
         super().__init__()
         self.source = source
         self.detector = detector
         self._running = True
+        
+        # 성능 설정 (기본값 사용 또는 전달받은 설정)
+        self.performance_config = performance_config or {
+            "sleep_time": 0.1,
+            "imgsz": 640
+        }
         
         # ROI: (x, y, w, h) in 원본 프레임 픽셀 좌표 또는 None
         self.roi = None
         
         # 차량 추적기
         self.tracker = VehicleTracker()
+        
+        # FPS 측정용 변수들
+        self.fps_counter = 0
+        self.fps_start_time = time.time()
+        self.current_fps = 0.0
 
     def stop(self):
         """워커 스레드 중지"""
@@ -50,6 +61,7 @@ class StreamWorker(QtCore.QThread):
 
         self.status.emit("실행 중")
         frame_count = 0
+        last_fps_update = time.time()
         
         while self._running:
             ret, frame = cap.read()
@@ -68,13 +80,24 @@ class StreamWorker(QtCore.QThread):
             if qimg is not None:
                 self.frame_ready.emit(qimg)
             
-            # 상태 업데이트 (주기적으로만)
-            if frame_count % 30 == 0:
-                total_count = self.tracker.count
-                self.status.emit(f"실행 중 | 프레임: {frame_count} | 카운트: {total_count}")
+            # FPS 계산
+            current_time = time.time()
+            self.fps_counter += 1
             
-            # 적절한 프레임레이트 유지 (처리 속도 최적화)
-            time.sleep(0.1)  # ~10 FPS (탐지 속도 향상)
+            # 1초마다 FPS 업데이트
+            if current_time - last_fps_update >= 1.0:
+                self.current_fps = self.fps_counter / (current_time - last_fps_update)
+                self.fps_counter = 0
+                last_fps_update = current_time
+            
+            # 상태 업데이트 (주기적으로만)
+            if frame_count % 10 == 0:  # 더 자주 업데이트
+                total_count = self.tracker.count
+                self.status.emit(f"🎥 FPS: {self.current_fps:.1f} | 프레임: {frame_count} | 카운트: {total_count}")
+            
+            # 적절한 프레임레이트 유지 (성능 설정에 따른 처리 속도 최적화)
+            sleep_time = self.performance_config.get("sleep_time", 0.1)
+            time.sleep(sleep_time)
 
         cap.release()
         self.status.emit("중지됨")
@@ -84,10 +107,11 @@ class StreamWorker(QtCore.QThread):
         try:
             import cv2
             
-            # 프레임을 640x640으로 리사이즈 (속도 최적화)
+            # 프레임을 성능 설정에 따른 해상도로 리사이즈 (속도 최적화)
+            target_size = self.performance_config.get("imgsz", 640)
             h, w = frame.shape[:2]
-            if w != 640 or h != 640:
-                frame = cv2.resize(frame, (640, 640), interpolation=cv2.INTER_LINEAR)
+            if w != target_size or h != target_size:
+                frame = cv2.resize(frame, (target_size, target_size), interpolation=cv2.INTER_LINEAR)
             
             # 탐지 수행
             annotated, results = self.detector.detect(frame, self.roi)

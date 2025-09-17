@@ -8,6 +8,7 @@ from pathlib import Path
 from PyQt5 import QtCore, QtGui, QtWidgets
 
 from ..core import Config, VehicleDetector
+from ..core.performance_config import PerformanceConfig
 from ..api import get_cctv_list
 from .stream_panel import StreamPanel
 
@@ -45,6 +46,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.detector = None
         self.panels = []
         self._cols = 2
+        
+        # 현재 성능 설정
+        self.current_performance_preset = "balanced"
         
         self._setup_ui()
         self._load_default_model()
@@ -182,6 +186,9 @@ class MainWindow(QtWidgets.QMainWindow):
         
         # 설정 패널
         self._create_settings_panel(layout)
+        
+        # 성능 설정 패널
+        self._create_performance_panel(layout)
         
         # 스트림 패널 영역
         self._create_stream_area(layout)
@@ -329,6 +336,179 @@ class MainWindow(QtWidgets.QMainWindow):
         self.model_browse.clicked.connect(self._browse_model)
         self.model_load.clicked.connect(self._load_model)
 
+    def _create_performance_panel(self, parent_layout):
+        """성능 최적화 패널 생성"""
+        perf_group = QtWidgets.QGroupBox("⚡ 성능 최적화 (FPS 개선)")
+        perf_layout = QtWidgets.QHBoxLayout(perf_group)
+        
+        # 성능 프리셋 선택
+        preset_layout = QtWidgets.QVBoxLayout()
+        preset_layout.addWidget(QtWidgets.QLabel("🚀 성능 프리셋:"))
+        
+        self.perf_combo = QtWidgets.QComboBox()
+        for preset_name in PerformanceConfig.get_preset_names():
+            preset_info = PerformanceConfig.get_preset(preset_name)
+            self.perf_combo.addItem(f"{preset_info['name']}", preset_name)
+        
+        # 기본값을 "balanced"로 설정
+        for i in range(self.perf_combo.count()):
+            if self.perf_combo.itemData(i) == "balanced":
+                self.perf_combo.setCurrentIndex(i)
+                break
+        
+        self.perf_combo.setStyleSheet("""
+            QComboBox {
+                background: white;
+                border: 2px solid #ddd;
+                border-radius: 8px;
+                padding: 8px 12px;
+                font-size: 12px;
+                font-weight: 600;
+                min-width: 200px;
+            }
+            QComboBox:hover {
+                border-color: #667eea;
+            }
+            QComboBox::drop-down {
+                border: none;
+                width: 30px;
+            }
+        """)
+        
+        preset_layout.addWidget(self.perf_combo)
+        
+        # 현재 설정 표시
+        self.perf_info_label = QtWidgets.QLabel()
+        self.perf_info_label.setWordWrap(True)
+        self.perf_info_label.setStyleSheet("""
+            QLabel {
+                background: #e8f4f8;
+                border: 1px solid #b3d9e6;
+                border-radius: 6px;
+                padding: 8px;
+                font-size: 11px;
+                color: #2c3e50;
+            }
+        """)
+        self._update_performance_info()
+        
+        # FPS 목표 표시
+        fps_layout = QtWidgets.QVBoxLayout()
+        fps_layout.addWidget(QtWidgets.QLabel("📊 예상 FPS:"))
+        
+        self.fps_target_label = QtWidgets.QLabel("10 FPS")
+        self.fps_target_label.setStyleSheet("""
+            QLabel {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 rgba(76, 175, 80, 0.1), stop:1 rgba(139, 195, 74, 0.1));
+                border: 2px solid #4CAF50;
+                border-radius: 10px;
+                padding: 12px;
+                font-size: 16px;
+                font-weight: bold;
+                color: #2e7d32;
+                text-align: center;
+            }
+        """)
+        fps_layout.addWidget(self.fps_target_label)
+        
+        # 적용 버튼
+        self.apply_perf_btn = QtWidgets.QPushButton("✅ 설정 적용")
+        self.apply_perf_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #4CAF50, stop:1 #45a049);
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 12px 24px;
+                font-weight: bold;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #45a049, stop:1 #3d8b40);
+            }
+        """)
+        
+        # 레이아웃 구성
+        left_layout = QtWidgets.QVBoxLayout()
+        left_layout.addLayout(preset_layout)
+        left_layout.addWidget(self.perf_info_label)
+        
+        right_layout = QtWidgets.QVBoxLayout()
+        right_layout.addLayout(fps_layout)
+        right_layout.addWidget(self.apply_perf_btn)
+        
+        perf_layout.addLayout(left_layout, 2)
+        perf_layout.addLayout(right_layout, 1)
+        
+        parent_layout.addWidget(perf_group)
+        
+        # 시그널 연결
+        self.perf_combo.currentIndexChanged.connect(self._on_performance_preset_changed)
+        self.apply_perf_btn.clicked.connect(self._apply_performance_settings)
+
+    def _update_performance_info(self):
+        """성능 설정 정보 업데이트"""
+        preset_name = self.current_performance_preset
+        preset = PerformanceConfig.get_preset(preset_name)
+        
+        info_text = f"""
+🔧 해상도: {preset['imgsz']}x{preset['imgsz']}
+🎯 신뢰도 임계값: {preset['conf']}
+⏱️ 처리 간격: {preset['sleep_time']}초
+📝 {preset['description']}
+        """.strip()
+        
+        self.perf_info_label.setText(info_text)
+        self.fps_target_label.setText(f"{preset['fps_target']} FPS")
+
+    def _on_performance_preset_changed(self):
+        """성능 프리셋 변경 시"""
+        preset_name = self.perf_combo.currentData()
+        if preset_name:
+            self.current_performance_preset = preset_name
+            self._update_performance_info()
+
+    def _apply_performance_settings(self):
+        """성능 설정 적용"""
+        preset = PerformanceConfig.get_preset(self.current_performance_preset)
+        
+        # 기존 설정 UI 업데이트
+        self.imgsz_spin.setValue(preset['imgsz'])
+        self.conf_spin.setValue(preset['conf'])
+        
+        # 모델 재로드 (새로운 설정으로)
+        if self.detector:
+            try:
+                model_path = self.model_line.text()
+                self.detector = VehicleDetector(
+                    model_path, 
+                    imgsz=preset['imgsz'], 
+                    conf=preset['conf']
+                )
+                
+                # 실행 중인 스트림들에 새 설정 적용
+                for panel in self.panels:
+                    panel.detector = self.detector
+                    if hasattr(panel.worker, 'detector'):
+                        panel.worker.detector = self.detector
+                
+                QtWidgets.QMessageBox.information(
+                    self, "설정 적용 완료",
+                    f"✅ {PerformanceConfig.get_preset(self.current_performance_preset)['name']} 설정이 적용되었습니다!\n\n"
+                    f"🔧 해상도: {preset['imgsz']}x{preset['imgsz']}\n"
+                    f"🎯 신뢰도: {preset['conf']}\n"
+                    f"📊 목표 FPS: {preset['fps_target']}"
+                )
+                
+            except Exception as e:
+                QtWidgets.QMessageBox.warning(
+                    self, "설정 적용 오류", 
+                    f"성능 설정 적용 중 오류가 발생했습니다:\n{e}"
+                )
+
     def _create_stream_area(self, parent_layout):
         """스트림 패널 영역 생성"""
         # 스크롤 영역
@@ -403,8 +583,12 @@ class MainWindow(QtWidgets.QMainWindow):
                 self, "모델 필요", "먼저 탐지 모델을 로드해주세요."
             )
             return
-            
-        panel = StreamPanel(source, self.detector)
+        
+        # 현재 성능 설정 가져오기
+        from ..core.performance_config import PerformanceConfig
+        perf_config = PerformanceConfig.get_preset(self.current_performance_preset)
+        
+        panel = StreamPanel(source, self.detector, perf_config)
         
         # 그리드에 배치
         idx = len(self.panels)

@@ -12,10 +12,11 @@ from ..core.esal_calculator import ESALCalculator
 class StreamPanel(QtWidgets.QWidget):
     """단일 스트림을 위한 패널 위젯"""
     
-    def __init__(self, source: str, detector: VehicleDetector):
+    def __init__(self, source: str, detector: VehicleDetector, performance_config: dict = None):
         super().__init__()
         self.source = source
         self.detector = detector
+        self.performance_config = performance_config or {"sleep_time": 0.1, "imgsz": 640}
         self.roi = None
         self.worker = None
         self.esal_calculator = ESALCalculator()
@@ -122,6 +123,24 @@ class StreamPanel(QtWidgets.QWidget):
         control_layout.addWidget(self.start_btn)
         control_layout.addWidget(self.stop_btn)
         self.layout.addLayout(control_layout)
+        
+        # FPS 및 성능 정보 표시
+        self.fps_label = QtWidgets.QLabel("🎥 FPS: 0.0 | 대기 중...")
+        self.fps_label.setAlignment(QtCore.Qt.AlignCenter)
+        self.fps_label.setStyleSheet("""
+            QLabel {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 rgba(52, 152, 219, 0.1), stop:1 rgba(155, 89, 182, 0.1));
+                border: 2px solid #3498db;
+                border-radius: 10px;
+                padding: 10px;
+                font-size: 14px;
+                font-weight: 700;
+                font-family: "SF Pro Display", "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", monospace;
+                color: #2c3e50;
+            }
+        """)
+        self.layout.addWidget(self.fps_label)
 
         # 카운터 UI
         counter_frame = QtWidgets.QFrame()
@@ -230,7 +249,7 @@ class StreamPanel(QtWidgets.QWidget):
         if self.worker is not None and self.worker.isRunning():
             return
             
-        self.worker = StreamWorker(self.source, self.detector)
+        self.worker = StreamWorker(self.source, self.detector, self.performance_config)
         self.worker.frame_ready.connect(self.on_frame)
         self.worker.status.connect(self.on_status)
         self.worker.count_changed.connect(self.on_count_changed)
@@ -263,8 +282,39 @@ class StreamPanel(QtWidgets.QWidget):
 
     def on_status(self, msg: str):
         """상태 메시지 업데이트"""
+        # FPS 정보를 FPS 라벨에 표시
+        self.fps_label.setText(msg)
+        
+        # 제목 표시에도 간단한 정보 표시
         base_title = f"📹 {self.source}"
-        self.title_label.setText(f"{base_title} | {msg}")
+        if "실행 중" in msg or "FPS" in msg:
+            # FPS 정보가 있으면 녹색으로 표시
+            self.title_label.setStyleSheet("""
+                QLabel {
+                    font-size: 18px;
+                    font-weight: 800;
+                    font-family: "SF Pro Display", "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
+                    color: #27ae60;
+                    padding: 10px;
+                    border-radius: 10px;
+                    text-align: center;
+                }
+            """)
+        elif "중지" in msg:
+            # 중지 시 빨간색으로
+            self.title_label.setStyleSheet("""
+                QLabel {
+                    font-size: 18px;
+                    font-weight: 800;
+                    font-family: "SF Pro Display", "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
+                    color: #e74c3c;
+                    padding: 10px;
+                    border-radius: 10px;
+                    text-align: center;
+                }
+            """)
+        
+        self.title_label.setText(f"{base_title}")
 
     def on_count_changed(self, counts: dict):
         """카운트 변경 처리"""
