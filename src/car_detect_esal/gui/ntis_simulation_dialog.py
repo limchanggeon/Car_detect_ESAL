@@ -235,6 +235,7 @@ class NTISSimulationDialog(QtWidgets.QDialog):
         url_layout.addWidget(QtWidgets.QLabel("CCTV 이름:"))
         self.name_input = QtWidgets.QLineEdit()
         self.name_input.setPlaceholderText("예: 강남역 사거리 CCTV")
+        self.name_input.setText("실제 CCTV 스트림 (KT)")
         self.name_input.setStyleSheet("""
             QLineEdit {
                 padding: 8px 12px;
@@ -253,9 +254,9 @@ class NTISSimulationDialog(QtWidgets.QDialog):
         # 스트림 URL
         url_layout.addWidget(QtWidgets.QLabel("스트림 URL:"))
         self.url_input = QtWidgets.QLineEdit()
-        self.url_input.setPlaceholderText("예시 URL을 복사해서 사용하거나 직접 입력하세요")
-        # 기본값으로 테스트 가능한 URL 설정
-        self.url_input.setText("http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4")
+        self.url_input.setPlaceholderText("실제 CCTV 스트림 URL 또는 테스트 URL을 입력하세요")
+        # 기본값으로 실제 CCTV 스트림 설정
+        self.url_input.setText("http://cctvsec.ktict.co.kr:8081/openapix017/149/playlist.m3u8?wmsAuthSign=c2VydmVyX3RpbWU9MTAvMi8yMDI1IDE6MDA6MzkgQU0maGFzaF92YWx1ZT13ZWRzU0xpUEMvNWl6N295ZW9IYzBBPT0mdmFsaWRtaW51dGVzPTEyMCZpZD1lOTRkZjg5NzJlMTk0ZTQ4OWQ2YWJiZDdlN2JjMzQ2OS0xNzU5MzcwNDM5OTU3LTE0OQ==")
         self.url_input.setStyleSheet("""
             QLineEdit {
                 padding: 8px 12px;
@@ -307,7 +308,52 @@ class NTISSimulationDialog(QtWidgets.QDialog):
     def _load_sample_data(self):
         """샘플 데이터 로드"""
         # 테스트용 샘플 CCTV 데이터 (실제 사용 가능한 URL 포함)
+        # 국가교통정보센터 샘플 CCTV들 (ID만 변경하여 생성)
+        base_auth = 'c2VydmVyX3RpbWU9MTAvMi8yMDI1IDE6MDA6MzkgQU0maGFzaF92YWx1ZT13ZWRzU0xpUEMvNWl6N285ZW9IYzBBPT0mdmFsaWRtaW51dGVzPTEyMCZpZD1lOTRkZjg5NzJlMTk0ZTQ4OWQ2YWJiZDdlN2JjMzQ2OS0xNzU5MzcwNDM5OTU3LTE0OQ=='
+        
         sample_data = [
+            {
+                'name': '🔴 국가교통정보센터 CCTV-149 (원본)',
+                'location': '교통센터',
+                'type': 'HLS',
+                'url': f'http://cctvsec.ktict.co.kr:8081/openapix017/149/playlist.m3u8?wmsAuthSign={base_auth}'
+            },
+            {
+                'name': '🔴 국가교통정보센터 CCTV-150',
+                'location': '교통센터',
+                'type': 'HLS',
+                'url': f'http://cctvsec.ktict.co.kr:8081/openapix017/150/playlist.m3u8?wmsAuthSign={base_auth}'
+            },
+            {
+                'name': '🔴 국가교통정보센터 CCTV-151',
+                'location': '교통센터',
+                'type': 'HLS',
+                'url': f'http://cctvsec.ktict.co.kr:8081/openapix017/151/playlist.m3u8?wmsAuthSign={base_auth}'
+            },
+            {
+                'name': '🔴 국가교통정보센터 CCTV-148',
+                'location': '교통센터',
+                'type': 'HLS',
+                'url': f'http://cctvsec.ktict.co.kr:8081/openapix017/148/playlist.m3u8?wmsAuthSign={base_auth}'
+            },
+            {
+                'name': '🔴 국가교통정보센터 CCTV-147',
+                'location': '교통센터',
+                'type': 'HLS',
+                'url': f'http://cctvsec.ktict.co.kr:8081/openapix017/147/playlist.m3u8?wmsAuthSign={base_auth}'
+            },
+            {
+                'name': '🔴 국가교통정보센터 CCTV-100',
+                'location': '교통센터',
+                'type': 'HLS',
+                'url': f'http://cctvsec.ktict.co.kr:8081/openapix017/100/playlist.m3u8?wmsAuthSign={base_auth}'
+            },
+            {
+                'name': '🔴 국가교통정보센터 CCTV-200',
+                'location': '교통센터',
+                'type': 'HLS',
+                'url': f'http://cctvsec.ktict.co.kr:8081/openapix017/200/playlist.m3u8?wmsAuthSign={base_auth}'
+            },
             {
                 'name': '테스트용 로컬 비디오 1',
                 'location': '로컬',
@@ -357,11 +403,22 @@ class NTISSimulationDialog(QtWidgets.QDialog):
             url_item = QtWidgets.QTableWidgetItem(item['url'])
             url_item.setToolTip(item['url'])
             
-            # 로컬 파일이면 초록색, 원격이면 주황색
-            if item['url'].startswith('./') or item['url'].startswith('/'):
-                url_item.setForeground(QtGui.QColor('#27ae60'))
+            # 색상으로 구분: 국가교통정보센터는 빨간색, 로컬은 초록색, 원격 테스트는 주황색
+            if '국가교통정보센터' in item['name']:
+                url_item.setForeground(QtGui.QColor('#e74c3c'))  # 빨간색 (국가교통정보센터)
+                # 국가교통정보센터 CCTV 항목을 굵게 표시
+                for col in range(4):
+                    cell_item = self.sample_table.item(i, col)
+                    if cell_item:
+                        font = cell_item.font()
+                        font.setBold(True)
+                        cell_item.setFont(font)
+                        # 배경색도 살짝 강조
+                        cell_item.setBackground(QtGui.QColor('#fdf2f2'))
+            elif item['url'].startswith('./') or item['url'].startswith('/'):
+                url_item.setForeground(QtGui.QColor('#27ae60'))  # 초록색 (로컬)
             else:
-                url_item.setForeground(QtGui.QColor('#f39c12'))
+                url_item.setForeground(QtGui.QColor('#f39c12'))  # 주황색 (원격 테스트)
                 
             self.sample_table.setItem(i, 3, url_item)
     
