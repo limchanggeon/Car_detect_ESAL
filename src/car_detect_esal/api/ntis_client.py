@@ -13,6 +13,10 @@ import os
 import re
 import json
 import requests
+import urllib3
+
+# SSL 경고 비활성화
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 try:
     import xmltodict
@@ -95,20 +99,20 @@ def get_cctv_list(service_key: Optional[str] = None,
     if not key:
         raise RuntimeError('NTIS API 키가 설정되어 있지 않습니다.')
 
-    # 실제 NTIS Open API 엔드포인트들 (여러 가능한 엔드포인트)
+    # 공공데이터포털 기반 NTIS API 엔드포인트들
     possible_endpoints = [
-        'http://openapi.its.go.kr/service/rest/cctv/getCctvList',
-        'https://openapi.its.go.kr/service/rest/cctv/getCctvList', 
-        'http://apis.data.go.kr/1613000/TrafficCctvInfoService/getCctvList',
-        'https://apis.data.go.kr/1613000/TrafficCctvInfoService/getCctvList'
+        'https://apis.data.go.kr/1613000/TrafficCctvInfoService/getCctvInfo',
+        'http://apis.data.go.kr/1613000/TrafficCctvInfoService/getCctvInfo',
+        'https://openapi.its.go.kr/api/traffiCctvInfoService/getCctvInfo',
+        'http://openapi.its.go.kr/api/traffiCctvInfoService/getCctvInfo'
     ]
     url = endpoint or possible_endpoints[0]
     
     params = {
-        'serviceKey': key,  # serviceKey 파라미터명 사용
-        'type': getType or 'json',
-        'numOfRows': kwargs.get('numOfRows', 50),  # 한 번에 가져올 개수
-        'pageNo': kwargs.get('pageNo', 1),  # 페이지 번호
+        'serviceKey': key,
+        'resultType': getType or 'json',  # resultType 사용
+        'numOfRows': kwargs.get('numOfRows', 50),
+        'pageNo': kwargs.get('pageNo', 1),
     }
     
     # 좌표 기반 검색 파라미터 추가
@@ -128,16 +132,32 @@ def get_cctv_list(service_key: Optional[str] = None,
     print(f"[NTIS] API 호출: {url}")
     print(f"[NTIS] 파라미터: {params}")
 
-    # 여러 엔드포인트 시도
+    # 여러 엔드포인트 시도 (SSL 검증 완화)
     last_error = None
     endpoints_to_try = [url] if endpoint else possible_endpoints
+    
+    # 요청 헤더 추가
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8'
+    }
     
     for try_url in endpoints_to_try:
         try:
             print(f"[NTIS] 시도 중: {try_url}")
-            resp = requests.get(try_url, params=params, timeout=10)
+            # SSL 검증 완화 및 타임아웃 증가
+            resp = requests.get(
+                try_url, 
+                params=params, 
+                headers=headers,
+                timeout=15,
+                verify=False  # SSL 인증서 검증 건너뛰기
+            )
             resp.raise_for_status()
             print(f"[NTIS] 성공: {try_url}")
+            print(f"[NTIS] 응답 상태: {resp.status_code}")
+            print(f"[NTIS] 응답 크기: {len(resp.text)} bytes")
             break
         except Exception as e:
             print(f"[NTIS] 실패: {try_url} - {e}")

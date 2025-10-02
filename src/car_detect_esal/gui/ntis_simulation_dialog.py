@@ -253,7 +253,9 @@ class NTISSimulationDialog(QtWidgets.QDialog):
         # 스트림 URL
         url_layout.addWidget(QtWidgets.QLabel("스트림 URL:"))
         self.url_input = QtWidgets.QLineEdit()
-        self.url_input.setPlaceholderText("예: rtsp://example.com/stream 또는 http://example.com/stream.m3u8")
+        self.url_input.setPlaceholderText("예시 URL을 복사해서 사용하거나 직접 입력하세요")
+        # 기본값으로 테스트 가능한 URL 설정
+        self.url_input.setText("http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4")
         self.url_input.setStyleSheet("""
             QLineEdit {
                 padding: 8px 12px;
@@ -267,13 +269,19 @@ class NTISSimulationDialog(QtWidgets.QDialog):
         """)
         url_layout.addWidget(self.url_input)
         
-        # URL 형식 안내
+        # URL 형식 안내 및 예시
         format_info = QtWidgets.QLabel(
-            "💡 지원되는 형식:\n"
-            "• RTSP: rtsp://server/stream\n"
-            "• HTTP Live Streaming: http://server/stream.m3u8\n"
-            "• HTTP MP4: http://server/video.mp4\n"
-            "• 로컬 파일: /path/to/video.mp4"
+            "💡 지원되는 형식 및 예시:\n\n"
+            "• RTSP 스트림:\n"
+            "  rtsp://wowzaec2demo.streamlock.net/vod/mp4:BigBuckBunny_115k.mp4\n\n"
+            "• HTTP MP4:\n"
+            "  http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4\n\n"
+            "• HTTP Live Streaming:\n"
+            "  http://server/stream.m3u8\n\n"
+            "• 로컬 파일:\n"
+            "  ./demo_videos/video.mp4\n\n"
+            "• IP 카메라 (일반적인 형식):\n"
+            "  rtsp://admin:password@192.168.1.100:554/stream"
         )
         format_info.setStyleSheet("""
             QLabel {
@@ -298,37 +306,43 @@ class NTISSimulationDialog(QtWidgets.QDialog):
     
     def _load_sample_data(self):
         """샘플 데이터 로드"""
-        # 테스트용 샘플 CCTV 데이터
+        # 테스트용 샘플 CCTV 데이터 (실제 사용 가능한 URL 포함)
         sample_data = [
             {
-                'name': '강남역 사거리',
-                'location': '서울 강남구',
-                'type': 'HD',
-                'url': 'rtsp://sample.com/gangnam'
-            },
-            {
-                'name': '한강대교 북단',
-                'location': '서울 용산구', 
-                'type': 'FHD',
-                'url': 'http://sample.com/hangang.m3u8'
-            },
-            {
-                'name': '인천공항 진입로',
-                'location': '인천 중구',
-                'type': 'HD',
-                'url': 'rtsp://sample.com/airport'
-            },
-            {
-                'name': '부산역 광장',
-                'location': '부산 동구',
-                'type': 'HD', 
-                'url': 'http://sample.com/busan.m3u8'
-            },
-            {
-                'name': '테스트용 로컬 비디오',
+                'name': '테스트용 로컬 비디오 1',
                 'location': '로컬',
                 'type': 'MP4',
                 'url': './demo_videos/화면 기록 2025-08-22 오후 4.34.08.mp4'
+            },
+            {
+                'name': '테스트용 로컬 비디오 2', 
+                'location': '로컬',
+                'type': 'MP4',
+                'url': './demo_videos/화면 기록 2025-08-26 오후 3.29.27.mp4'
+            },
+            {
+                'name': 'Big Buck Bunny (테스트 스트림)',
+                'location': '인터넷',
+                'type': 'HTTP',
+                'url': 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'
+            },
+            {
+                'name': 'Sintel (테스트 스트림)',
+                'location': '인터넷', 
+                'type': 'HTTP',
+                'url': 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4'
+            },
+            {
+                'name': '샘플 RTSP 스트림',
+                'location': '시뮬레이션',
+                'type': 'RTSP',
+                'url': 'rtsp://wowzaec2demo.streamlock.net/vod/mp4:BigBuckBunny_115k.mp4'
+            },
+            {
+                'name': '직접 입력하기',
+                'location': '사용자 정의',
+                'type': 'Custom',
+                'url': '여기를 선택하면 직접 입력 탭으로 이동합니다'
             }
         ]
         
@@ -357,13 +371,19 @@ class NTISSimulationDialog(QtWidgets.QDialog):
         if selected_rows:
             row = selected_rows[0].row()
             if 0 <= row < len(self.sample_data):
-                self.selected_stream = {
-                    'name': self.sample_data[row]['name'],
-                    'stream_url': self.sample_data[row]['url'],
-                    'location': self.sample_data[row]['location'],
-                    'type': self.sample_data[row]['type']
-                }
-                self.select_btn.setEnabled(True)
+                # '직접 입력하기' 선택 시 URL 입력 탭으로 전환
+                if self.sample_data[row]['name'] == '직접 입력하기':
+                    self.tab_widget.setCurrentIndex(1)  # URL 입력 탭으로 전환
+                    self.selected_stream = None
+                    self.select_btn.setEnabled(False)
+                else:
+                    self.selected_stream = {
+                        'name': self.sample_data[row]['name'],
+                        'stream_url': self.sample_data[row]['url'],
+                        'location': self.sample_data[row]['location'],
+                        'type': self.sample_data[row]['type']
+                    }
+                    self.select_btn.setEnabled(True)
         else:
             self.selected_stream = None
             self.select_btn.setEnabled(False)

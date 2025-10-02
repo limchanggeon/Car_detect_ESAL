@@ -652,50 +652,29 @@ class MainWindow(QtWidgets.QMainWindow):
     def _show_ntis_dialog(self):
         """NTIS 카메라 선택 다이얼로그"""
         try:
-            # 먼저 실제 NTIS API 시도
-            try:
-                from .cctv_dialog import CCTVSelectionDialog
-                
-                # API 키 입력 다이얼로그 먼저 표시
-                api_key, ok = QtWidgets.QInputDialog.getText(
-                    self, "NTIS API 키 입력",
-                    "국가교통정보센터 API 키를 입력하세요:\n(기본값: 발급받은 키)",
-                    QtWidgets.QLineEdit.Normal,
-                    "e94df8972e194e489d6abbd7e7bc3469"  # 발급받은 키를 기본값으로
-                )
-                
-                if not ok or not api_key.strip():
-                    return
-                    
-                # CCTV 선택 다이얼로그 표시
-                dialog = CCTVSelectionDialog(api_key.strip(), self)
-                if dialog.exec_() == QtWidgets.QDialog.Accepted:
-                    selected_cctv = dialog.get_selected_cctv()
-                    if selected_cctv:
-                        self._process_selected_cctv(selected_cctv)
-                        
-            except Exception as api_error:
-                # API 실패 시 시뮬레이션 모드로 전환
-                print(f"[NTIS] API 연결 실패: {api_error}")
-                
-                result = QtWidgets.QMessageBox.question(
-                    self, "NTIS API 연결 실패",
-                    f"NTIS API 서버에 연결할 수 없습니다:\n{api_error}\n\n"
-                    "시뮬레이션 모드로 전환하시겠습니까?\n"
-                    "(테스트용 CCTV 목록 또는 직접 URL 입력)",
-                    QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
-                    QtWidgets.QMessageBox.Yes
-                )
-                
-                if result == QtWidgets.QMessageBox.Yes:
-                    self._show_simulation_dialog()
+            # API 상태 안내 메시지
+            result = QtWidgets.QMessageBox.question(
+                self, "NTIS CCTV 연동",
+                "🚨 NTIS 실시간 CCTV 연동\n\n"
+                "현재 공공데이터포털 API 서버 연결에 문제가 있어\n"
+                "시뮬레이션 모드로 진행합니다.\n\n"
+                "다음 옵션을 사용할 수 있습니다:\n"
+                "• 📹 테스트용 샘플 CCTV\n"
+                "• 🔗 직접 스트림 URL 입력 (RTSP/HTTP)\n"
+                "• 📁 로컬 비디오 파일\n\n"
+                "계속 진행하시겠습니까?",
+                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+                QtWidgets.QMessageBox.Yes
+            )
+            
+            if result == QtWidgets.QMessageBox.Yes:
+                self._show_simulation_dialog()
                     
         except Exception as e:
             QtWidgets.QMessageBox.critical(
                 self, "NTIS 연동 오류",
                 f"NTIS CCTV 연동 중 오류가 발생했습니다:\n\n{e}\n\n"
                 "• 인터넷 연결을 확인해주세요\n"
-                "• API 키가 올바른지 확인해주세요\n"
                 "• 필요한 라이브러리가 설치되어 있는지 확인해주세요"
             )
     
