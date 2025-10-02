@@ -614,7 +614,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self._add_stream(source)
             self.input_line.clear()
 
-    def _add_stream(self, source: str):
+    def _add_stream(self, source: str, name: str = None):
         """스트림 패널 추가"""
         if self.detector is None:
             QtWidgets.QMessageBox.warning(
@@ -627,6 +627,10 @@ class MainWindow(QtWidgets.QMainWindow):
         perf_config = PerformanceConfig.get_preset(self.current_performance_preset)
         
         panel = StreamPanel(source, self.detector, perf_config)
+        
+        # CCTV 이름이 제공된 경우 패널에 표시
+        if name:
+            panel.set_title(name)
         
         # 그리드에 배치
         idx = len(self.panels)
@@ -652,17 +656,61 @@ class MainWindow(QtWidgets.QMainWindow):
     def _show_ntis_dialog(self):
         """NTIS 카메라 선택 다이얼로그"""
         try:
-            # API 상태 안내 메시지
+            # 실제 API 사용 시도
+            print("[GUI] NTIS 실제 API 연동 시도...")
+            
+            # 먼저 실제 API 연결 확인 (빠른 테스트)
+            try:
+                from ..api.ntis_client import get_cctv_list
+                
+                # 작은 범위로 빠른 테스트 (서울 일부)
+                test_cctv = get_cctv_list(
+                    service_key="e94df8972e194e489d6abbd7e7bc3469",
+                    type='ex',
+                    cctvType=1,
+                    minX=127.0, maxX=127.1,
+                    minY=37.5, maxY=37.6,
+                    getType='json',
+                    endpoint='https://openapi.its.go.kr:9443/cctvInfo'
+                )
+                
+                if test_cctv and len(test_cctv) > 0:
+                    print(f"[GUI] ✅ 실제 API 연결 성공! 테스트 CCTV: {len(test_cctv)}개")
+                    
+                    # 실제 CCTV 선택 대화상자 표시
+                    from .cctv_dialog import CCTVSelectionDialog
+                    dialog = CCTVSelectionDialog(service_key="e94df8972e194e489d6abbd7e7bc3469", parent=self)
+                    if dialog.exec_() == QtWidgets.QDialog.Accepted and dialog.selected_cctv:
+                        selected = dialog.selected_cctv
+                        stream_url = selected.get('stream_url')
+                        cctv_name = selected.get('name', 'NTIS CCTV')
+                        
+                        if stream_url:
+                            print(f"[GUI] 선택된 CCTV: {cctv_name}")
+                            print(f"[GUI] 스트림 URL: {stream_url[:100]}...")
+                            self._add_stream(stream_url, cctv_name)
+                        else:
+                            QtWidgets.QMessageBox.warning(
+                                self, "스트림 오류",
+                                "선택한 CCTV의 스트림 URL이 없습니다."
+                            )
+                    return
+                    
+            except Exception as api_error:
+                print(f"[GUI] ❌ 실제 API 연결 실패: {api_error}")
+                # API 실패 시 시뮬레이션 모드로 fallback
+                pass
+            
+            # API 연결 실패 시 사용자에게 선택권 제공
             result = QtWidgets.QMessageBox.question(
                 self, "NTIS CCTV 연동",
                 "🚨 NTIS 실시간 CCTV 연동\n\n"
-                "현재 공공데이터포털 API 서버 연결에 문제가 있어\n"
-                "시뮬레이션 모드로 진행합니다.\n\n"
-                "다음 옵션을 사용할 수 있습니다:\n"
-                "• 📹 테스트용 샘플 CCTV\n"
+                "실제 API 연결에 문제가 있어 시뮬레이션 모드를 제안합니다.\n\n"
+                "시뮬레이션 모드에서 사용 가능한 옵션:\n"
+                "• � 국가교통정보센터 샘플 CCTV (실제 스트림)\n"
                 "• 🔗 직접 스트림 URL 입력 (RTSP/HTTP)\n"
                 "• 📁 로컬 비디오 파일\n\n"
-                "계속 진행하시겠습니까?",
+                "시뮬레이션 모드로 진행하시겠습니까?",
                 QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
                 QtWidgets.QMessageBox.Yes
             )
@@ -671,6 +719,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self._show_simulation_dialog()
                     
         except Exception as e:
+            print(f"[GUI] NTIS 대화상자 오류: {e}")
             QtWidgets.QMessageBox.critical(
                 self, "NTIS 연동 오류",
                 f"NTIS CCTV 연동 중 오류가 발생했습니다:\n\n{e}\n\n"

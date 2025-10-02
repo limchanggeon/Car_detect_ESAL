@@ -99,31 +99,26 @@ def get_cctv_list(service_key: Optional[str] = None,
     if not api_key:
         raise RuntimeError('NTIS API 키가 설정되어 있지 않습니다.')
 
-    # 가이드 기반 정확한 엔드포인트들 (우선순위 순)
+    # 올바른 NTIS API 엔드포인트 (실제 작동하는 URL)
     guide_endpoints = [
-        # 1. 가이드에서 제시한 원본 URL
+        # 1. 실제 작동하는 NTIS API URL
+        'https://openapi.its.go.kr:9443/cctvInfo',
+        # 2. 백업용 엔드포인트들
         'https://www.its.go.kr/openapi/cctvInfo',
-        # 2. 공공데이터포털 표준 서비스들
         'https://apis.data.go.kr/1613000/TrafficCctvInfoService/getCctvInfo',
-        'http://apis.data.go.kr/1613000/TrafficCctvInfoService/getCctvInfo',
-        # 3. 경찰청 교통정보서비스
-        'https://apis.data.go.kr/1262000/TrafficCctvInfoService/getCctvInfo',
-        'http://apis.data.go.kr/1262000/TrafficCctvInfoService/getCctvInfo',
-        # 4. 기타 가능한 엔드포인트들
-        'https://openapi.its.go.kr/api/cctvInfo',
-        'http://openapi.its.go.kr/api/cctvInfo'
+        'http://apis.data.go.kr/1613000/TrafficCctvInfoService/getCctvInfo'
     ]
     
     url = endpoint or guide_endpoints[0]
     
-    # 가이드에 따른 정확한 파라미터 구성
-    if 'www.its.go.kr' in (url or ''):
-        # ITS 원본 API 파라미터 (가이드 기준)
+    # NTIS API 파라미터 구성 (실제 작동 확인된 방식)
+    if 'openapi.its.go.kr:9443' in (url or '') or 'www.its.go.kr' in (url or ''):
+        # NTIS 원본 API 파라미터
         params = {
             'apiKey': api_key,
-            'type': type or 'all',        # ex(고속도로), its(국도), all(전체)
-            'cctvType': str(cctvType or 1),  # 1(실시간), 2(정지영상), 3(모두)
-            'getType': getType or 'json'     # json 또는 xml
+            'type': type or 'ex',           # ex(고속도로), its(국도), all(전체)
+            'cctvType': str(cctvType or 1), # 1(실시간), 2(동영상파일), 3(정지영상)
+            'getType': getType or 'json'    # json 또는 xml
         }
     else:
         # 공공데이터포털 표준 파라미터
@@ -134,14 +129,14 @@ def get_cctv_list(service_key: Optional[str] = None,
             'pageNo': kwargs.get('pageNo', 1)
         }
     
-    # 좌표 파라미터 추가 (대전 지역 기본값)
-    if minX is not None or maxX is not None or minY is not None or maxY is not None:
-        params.update({
-            'minX': str(minX) if minX is not None else '127.2',
-            'maxX': str(maxX) if maxX is not None else '127.5',
-            'minY': str(minY) if minY is not None else '36.2',
-            'maxY': str(maxY) if maxY is not None else '36.5'
-        })
+    # 좌표 파라미터 추가 (필수 파라미터!)
+    # 좌표가 제공되지 않으면 전국 범위 기본값 사용
+    params.update({
+        'minX': str(minX) if minX is not None else '127.100000',  # 최소 경도
+        'maxX': str(maxX) if maxX is not None else '128.890000',  # 최대 경도  
+        'minY': str(minY) if minY is not None else '34.100000',   # 최소 위도
+        'maxY': str(maxY) if maxY is not None else '39.100000'    # 최대 위도
+    })
     
     # 추가 파라미터 병합
     params.update({k: v for k, v in kwargs.items() if v is not None})
@@ -170,7 +165,14 @@ def get_cctv_list(service_key: Optional[str] = None,
             
             # 엔드포인트별 파라미터 조정
             current_params = params.copy()
-            if 'www.its.go.kr' not in try_url and 'apiKey' in current_params:
+            if 'openapi.its.go.kr:9443' in try_url:
+                # NTIS 실제 API용 파라미터 - 좌표는 소수점 형태 문자열로
+                for coord_key in ['minX', 'maxX', 'minY', 'maxY']:
+                    if coord_key in current_params:
+                        # 숫자를 6자리 소수점 문자열로 변환
+                        coord_val = float(current_params[coord_key])
+                        current_params[coord_key] = f"{coord_val:.6f}"
+            elif 'www.its.go.kr' not in try_url and 'apiKey' in current_params:
                 # 공공데이터포털용으로 파라미터 변환
                 current_params['serviceKey'] = current_params.pop('apiKey')
                 if 'type' in current_params:
@@ -236,20 +238,37 @@ def get_cctv_list(service_key: Optional[str] = None,
 
         candidates = []
         if isinstance(data, dict):
-            # NTIS API 응답 구조 처리
+            # 실제 NTIS API 응답 구조 처리
             response = data.get('response', {})
             if response:
-                header = response.get('header', {})
+                print(f"[NTIS] 응답 구조 확인 완료")
+                
+                # 실제 응답에서 data 필드 확인
+                cctv_data = response.get('data', [])
+                if isinstance(cctv_data, list) and len(cctv_data) > 0:
+                    candidates.append(cctv_data)
+                    print(f"[NTIS] CCTV 데이터 발견: {len(cctv_data)}개")
+                elif isinstance(cctv_data, dict):
+                    candidates.append([cctv_data])
+                    print(f"[NTIS] CCTV 데이터 발견: 1개")
+                
+                # 좌표 타입도 저장
+                coord_type = response.get('coordtype', 1)
+                print(f"[NTIS] 좌표 타입: {coord_type}")
+            
+            # 공공데이터포털 표준 응답 구조도 확인
+            if 'header' in data:
+                header = data.get('header', {})
                 result_code = header.get('resultCode', '')
                 result_msg = header.get('resultMsg', '')
                 
-                print(f"[NTIS] API 응답 코드: {result_code}, 메시지: {result_msg}")
+                print(f"[NTIS] 표준 API 응답 코드: {result_code}, 메시지: {result_msg}")
                 
-                if result_code and result_code != '00':
+                if result_code and result_code not in ['00', '0', 0]:
                     raise RuntimeError(f"NTIS API 오류: {result_msg} (코드: {result_code})")
                 
-                body = response.get('body', {})
-                items = body.get('items', {})
+                body = data.get('body', {})
+                items = body.get('items', {}) or body.get('item', [])
                 
                 if isinstance(items, dict):
                     item = items.get('item', [])
@@ -259,10 +278,10 @@ def get_cctv_list(service_key: Optional[str] = None,
                         candidates.append([item])
                 elif isinstance(items, list):
                     candidates.append(items)
-                    
+            
             # 기존 후보들도 확인
             for key1 in ('items', 'data', 'result', 'list'):
-                if key1 in data:
+                if key1 in data and key1 != 'response':  # response는 이미 처리함
                     candidates.append(data[key1])
                     
         if isinstance(data, list):
