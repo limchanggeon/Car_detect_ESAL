@@ -53,18 +53,33 @@ def _find_url_in_obj(obj):
 
 def _extract_cam_from_item(it: Dict) -> Dict:
     """항목 딕셔너리에서 표준화된 카메라 dict를 추출한다."""
+    # NTIS API 필드명에 맞게 매핑
     cam = {
-        'id': it.get('id') or it.get('cctvId') or it.get('spotId') or it.get('roadsectionid') or '',
-        'name': it.get('name') or it.get('title') or it.get('spotName') or it.get('cctvname') or '',
-        'stream_url': it.get('cctvurl') or it.get('streamUrl') or it.get('url') or it.get('videoUrl') or '',
-        'coordx': it.get('coordx') or it.get('longitude') or it.get('x') or '',
-        'coordy': it.get('coordy') or it.get('latitude') or it.get('y') or '',
-        'cctvtype': it.get('cctvtype') or it.get('cctvType') or it.get('cctv_type') or '',
+        'id': (it.get('roadsectionid') or it.get('id') or it.get('cctvId') or 
+               it.get('spotId') or ''),
+        'name': (it.get('cctvname') or it.get('name') or it.get('title') or 
+                 it.get('spotName') or ''),
+        'stream_url': (it.get('cctvurl') or it.get('streamUrl') or it.get('url') or 
+                      it.get('videoUrl') or ''),
+        'coordx': (it.get('coordx') or it.get('longitude') or it.get('x') or ''),
+        'coordy': (it.get('coordy') or it.get('latitude') or it.get('y') or ''),
+        'cctvtype': (it.get('cctvtype') or it.get('cctvType') or it.get('cctv_type') or ''),
+        'cctvformat': it.get('cctvformat', ''),
+        'cctvresolution': it.get('cctvresolution', ''),
+        'filecreatetime': it.get('filecreatetime', ''),
     }
+    
+    # URL이 없으면 객체에서 URL 패턴 찾기
     if not cam['stream_url']:
         found = _find_url_in_obj(it)
         if found:
             cam['stream_url'] = found
+            
+    # 필드 정리 (세미콜론 제거 등)
+    for key, value in cam.items():
+        if isinstance(value, str):
+            cam[key] = value.strip().rstrip(';')
+            
     return cam
 
 
@@ -74,46 +89,101 @@ def get_cctv_list(service_key: Optional[str] = None,
                   endpoint: Optional[str] = None, **kwargs) -> List[Dict]:
     """NTIS에서 CCTV 목록을 가져옵니다.
 
-    기본 엔드포인트는 예시이며 필요시 `endpoint` 인자로 실제 URL을 넘기세요.
+    실제 NTIS Open API 엔드포인트를 사용합니다.
     """
-    key = service_key or os.getenv('NTIS_API_KEY')
+    key = service_key or os.getenv('NTIS_API_KEY', 'e94df8972e194e489d6abbd7e7bc3469')
     if not key:
         raise RuntimeError('NTIS API 키가 설정되어 있지 않습니다.')
 
-    url = endpoint or 'https://api.ntis.go.kr/cctv/getCctvList'
+    # 실제 NTIS Open API 엔드포인트들 (여러 가능한 엔드포인트)
+    possible_endpoints = [
+        'http://openapi.its.go.kr/service/rest/cctv/getCctvList',
+        'https://openapi.its.go.kr/service/rest/cctv/getCctvList', 
+        'http://apis.data.go.kr/1613000/TrafficCctvInfoService/getCctvList',
+        'https://apis.data.go.kr/1613000/TrafficCctvInfoService/getCctvList'
+    ]
+    url = endpoint or possible_endpoints[0]
+    
     params = {
-        'apiKey': key,
-        'type': type,
-        'cctvType': cctvType,
-        'minX': minX,
-        'maxX': maxX,
-        'minY': minY,
-        'maxY': maxY,
-        'getType': getType,
+        'serviceKey': key,  # serviceKey 파라미터명 사용
+        'type': getType or 'json',
+        'numOfRows': kwargs.get('numOfRows', 50),  # 한 번에 가져올 개수
+        'pageNo': kwargs.get('pageNo', 1),  # 페이지 번호
     }
+    
+    # 좌표 기반 검색 파라미터 추가
+    if minX is not None:
+        params['minX'] = minX
+    if maxX is not None:
+        params['maxX'] = maxX  
+    if minY is not None:
+        params['minY'] = minY
+    if maxY is not None:
+        params['maxY'] = maxY
+        
+    # 추가 파라미터
     params = {k: v for k, v in params.items() if v is not None}
     params.update(kwargs)
+    
+    print(f"[NTIS] API 호출: {url}")
+    print(f"[NTIS] 파라미터: {params}")
 
-    resp = requests.get(url, params=params, timeout=15)
-    resp.raise_for_status()
+    # 여러 엔드포인트 시도
+    last_error = None
+    endpoints_to_try = [url] if endpoint else possible_endpoints
+    
+    for try_url in endpoints_to_try:
+        try:
+            print(f"[NTIS] 시도 중: {try_url}")
+            resp = requests.get(try_url, params=params, timeout=10)
+            resp.raise_for_status()
+            print(f"[NTIS] 성공: {try_url}")
+            break
+        except Exception as e:
+            print(f"[NTIS] 실패: {try_url} - {e}")
+            last_error = e
+            continue
+    else:
+        raise RuntimeError(f"모든 NTIS 엔드포인트 연결 실패. 마지막 오류: {last_error}")
 
     text = resp.text
     if getType and getType.lower() == 'json':
         try:
             data = resp.json()
-        except Exception:
-            raise RuntimeError('응답을 JSON으로 파싱할 수 없습니다')
+        except Exception as e:
+            raise RuntimeError(f'응답을 JSON으로 파싱할 수 없습니다: {e}')
 
         candidates = []
         if isinstance(data, dict):
+            # NTIS API 응답 구조 처리
+            response = data.get('response', {})
+            if response:
+                header = response.get('header', {})
+                result_code = header.get('resultCode', '')
+                result_msg = header.get('resultMsg', '')
+                
+                print(f"[NTIS] API 응답 코드: {result_code}, 메시지: {result_msg}")
+                
+                if result_code and result_code != '00':
+                    raise RuntimeError(f"NTIS API 오류: {result_msg} (코드: {result_code})")
+                
+                body = response.get('body', {})
+                items = body.get('items', {})
+                
+                if isinstance(items, dict):
+                    item = items.get('item', [])
+                    if isinstance(item, list):
+                        candidates.append(item)
+                    elif isinstance(item, dict):
+                        candidates.append([item])
+                elif isinstance(items, list):
+                    candidates.append(items)
+                    
+            # 기존 후보들도 확인
             for key1 in ('items', 'data', 'result', 'list'):
                 if key1 in data:
                     candidates.append(data[key1])
-            r = data.get('response', {}).get('body', {}).get('items')
-            if isinstance(r, dict) and 'item' in r:
-                candidates.append(r['item'])
-            elif isinstance(r, list):
-                candidates.append(r)
+                    
         if isinstance(data, list):
             candidates.append(data)
 

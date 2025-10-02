@@ -651,11 +651,117 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _show_ntis_dialog(self):
         """NTIS 카메라 선택 다이얼로그"""
-        # 간단한 구현 - 실제로는 더 복잡한 다이얼로그가 필요
+        try:
+            # 먼저 실제 NTIS API 시도
+            try:
+                from .cctv_dialog import CCTVSelectionDialog
+                
+                # API 키 입력 다이얼로그 먼저 표시
+                api_key, ok = QtWidgets.QInputDialog.getText(
+                    self, "NTIS API 키 입력",
+                    "국가교통정보센터 API 키를 입력하세요:\n(기본값: 발급받은 키)",
+                    QtWidgets.QLineEdit.Normal,
+                    "e94df8972e194e489d6abbd7e7bc3469"  # 발급받은 키를 기본값으로
+                )
+                
+                if not ok or not api_key.strip():
+                    return
+                    
+                # CCTV 선택 다이얼로그 표시
+                dialog = CCTVSelectionDialog(api_key.strip(), self)
+                if dialog.exec_() == QtWidgets.QDialog.Accepted:
+                    selected_cctv = dialog.get_selected_cctv()
+                    if selected_cctv:
+                        self._process_selected_cctv(selected_cctv)
+                        
+            except Exception as api_error:
+                # API 실패 시 시뮬레이션 모드로 전환
+                print(f"[NTIS] API 연결 실패: {api_error}")
+                
+                result = QtWidgets.QMessageBox.question(
+                    self, "NTIS API 연결 실패",
+                    f"NTIS API 서버에 연결할 수 없습니다:\n{api_error}\n\n"
+                    "시뮬레이션 모드로 전환하시겠습니까?\n"
+                    "(테스트용 CCTV 목록 또는 직접 URL 입력)",
+                    QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+                    QtWidgets.QMessageBox.Yes
+                )
+                
+                if result == QtWidgets.QMessageBox.Yes:
+                    self._show_simulation_dialog()
+                    
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(
+                self, "NTIS 연동 오류",
+                f"NTIS CCTV 연동 중 오류가 발생했습니다:\n\n{e}\n\n"
+                "• 인터넷 연결을 확인해주세요\n"
+                "• API 키가 올바른지 확인해주세요\n"
+                "• 필요한 라이브러리가 설치되어 있는지 확인해주세요"
+            )
+    
+    def _show_simulation_dialog(self):
+        """시뮬레이션 다이얼로그 표시"""
+        try:
+            from .ntis_simulation_dialog import NTISSimulationDialog
+            
+            dialog = NTISSimulationDialog(self)
+            if dialog.exec_() == QtWidgets.QDialog.Accepted:
+                selected_stream = dialog.get_selected_stream()
+                if selected_stream:
+                    self._process_selected_stream(selected_stream)
+        except ImportError as e:
+            QtWidgets.QMessageBox.critical(
+                self, "모듈 오류",
+                f"시뮬레이션 다이얼로그를 로드할 수 없습니다:\n{e}"
+            )
+    
+    def _process_selected_cctv(self, selected_cctv: dict):
+        """선택된 CCTV 처리"""
+        stream_url = selected_cctv.get('stream_url', '')
+        cctv_name = selected_cctv.get('name', 'Unknown CCTV')
+        
+        if not stream_url:
+            QtWidgets.QMessageBox.warning(
+                self, "스트림 URL 없음",
+                f"선택한 CCTV '{cctv_name}'에 스트림 URL이 없습니다.\n\n"
+                "다른 CCTV를 선택해주세요."
+            )
+            return
+        
+        # 스트림 추가
+        self._add_stream(stream_url)
+        
+        # 성공 메시지
         QtWidgets.QMessageBox.information(
-            self, "NTIS 연동",
-            "NTIS API 연동 기능은 준비 중입니다.\\n"
-            "현재는 로컬 파일이나 RTSP 스트림을 사용해주세요."
+            self, "CCTV 추가 완료",
+            f"✅ '{cctv_name}' CCTV가 추가되었습니다!\n\n"
+            f"🔗 URL: {stream_url[:50]}{'...' if len(stream_url) > 50 else ''}\n"
+            f"📍 위치: ({selected_cctv.get('coordx', 'N/A')}, {selected_cctv.get('coordy', 'N/A')})\n\n"
+            "▶️ 시작 버튼을 클릭하여 실시간 탐지를 시작하세요."
+        )
+    
+    def _process_selected_stream(self, selected_stream: dict):
+        """선택된 스트림 처리"""  
+        stream_url = selected_stream.get('stream_url', '')
+        stream_name = selected_stream.get('name', 'Unknown Stream')
+        
+        if not stream_url:
+            QtWidgets.QMessageBox.warning(
+                self, "스트림 URL 없음",
+                "스트림 URL이 비어있습니다."
+            )
+            return
+        
+        # 스트림 추가
+        self._add_stream(stream_url)
+        
+        # 성공 메시지
+        QtWidgets.QMessageBox.information(
+            self, "스트림 추가 완료",
+            f"✅ '{stream_name}' 스트림이 추가되었습니다!\n\n"
+            f"🔗 URL: {stream_url[:50]}{'...' if len(stream_url) > 50 else ''}\n"
+            f"📍 위치: {selected_stream.get('location', 'N/A')}\n\n"
+            "▶️ 시작 버튼을 클릭하여 실시간 탐지를 시작하세요."
         )
 
     def _start_all(self):
