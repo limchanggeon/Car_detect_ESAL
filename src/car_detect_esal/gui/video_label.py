@@ -65,13 +65,18 @@ class VideoLabel(QtWidgets.QLabel):
         # keep a reference to qimg to avoid underlying buffer being freed
         self._last_qimg = qimg
         
-        try:
-            print(f"[VideoLabel] 프레임 설정: {qimg.width()}x{qimg.height()}")
-        except Exception:
-            print("[VideoLabel] 프레임 설정 중 오류")
-            
         # store original frame size
-        self._orig_size = (qimg.width(), qimg.height())
+        new_size = (qimg.width(), qimg.height())
+        
+        # 크기가 변경된 경우에만 로그 출력 (성능 최적화)
+        if not hasattr(self, '_last_frame_size') or self._last_frame_size != new_size:
+            try:
+                print(f"[VideoLabel] 프레임 크기 변경: {new_size[0]}x{new_size[1]}")
+                self._last_frame_size = new_size
+            except Exception:
+                print("[VideoLabel] 프레임 설정 중 오류")
+        
+        self._orig_size = new_size
         
         # 고정 크기(800x600)로 스케일링, aspect ratio 유지
         target_size = QtCore.QSize(800, 600)

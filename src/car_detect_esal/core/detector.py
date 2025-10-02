@@ -30,7 +30,7 @@ class VehicleDetector:
         
         try:
             self.model = YOLO(self.model_path)
-            print(f"[VehicleDetector] 모델 로드 완료: {self.model_path}")
+            # 모델 로드 완료
         except Exception as e:
             raise RuntimeError(f"모델 로드 실패: {e}")
     

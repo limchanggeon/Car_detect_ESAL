@@ -68,7 +68,7 @@ def main():
     window = MainWindow()
     window.show()
     
-    print("✅ GUI 초기화 완료")
+    # GUI 초기화 완료
     
     # Start event loop
     sys.exit(app.exec_())

@@ -51,12 +51,11 @@ class StreamWorker(QtCore.QThread):
         """메인 워커 루프"""
         import cv2
         
-        print(f"[StreamWorker] 소스 열기: {self.source}")
+        # 소스 열기 시도
         cap = cv2.VideoCapture(self.source)
         
         if not cap.isOpened():
             self.status.emit("소스 열기 실패")
-            print(f"[StreamWorker] 소스 열기 실패: {self.source}")
             return
 
         self.status.emit("실행 중")
@@ -90,13 +89,13 @@ class StreamWorker(QtCore.QThread):
                 self.fps_counter = 0
                 last_fps_update = current_time
             
-            # 상태 업데이트 (주기적으로만)
-            if frame_count % 10 == 0:  # 더 자주 업데이트
+            # 상태 업데이트 (덜 자주 업데이트하여 UI 부하 감소)
+            if frame_count % 30 == 0:  # 30프레임마다 한 번씩만 업데이트
                 total_count = self.tracker.count
                 self.status.emit(f"🎥 FPS: {self.current_fps:.1f} | 프레임: {frame_count} | 카운트: {total_count}")
             
-            # 적절한 프레임레이트 유지 (성능 설정에 따른 처리 속도 최적화)
-            sleep_time = self.performance_config.get("sleep_time", 0.1)
+            # 적절한 프레임레이트 유지 (부드러운 재생을 위해 sleep 시간 단축)
+            sleep_time = self.performance_config.get("sleep_time", 0.03)  # 33FPS 목표
             time.sleep(sleep_time)
 
         cap.release()

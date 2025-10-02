@@ -562,7 +562,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     imgsz=preset['imgsz'],
                     conf=preset['conf']
                 )
-                print(f"[GUI] 기본 모델 로드 완료: {model_path} (성능설정: {self.current_performance_preset})")
+                        # 기본 모델 로드 완료
             except Exception as e:
                 print(f"[GUI] 기본 모델 로드 실패: {e}")
 
@@ -628,9 +628,17 @@ class MainWindow(QtWidgets.QMainWindow):
         
         panel = StreamPanel(source, self.detector, perf_config)
         
-        # CCTV 이름이 제공된 경우 패널에 표시
+        # CCTV 이름이 제공된 경우 패널에 표시 (StreamPanel에 set_title 메서드가 있는지 확인)
         if name:
-            panel.set_title(name)
+            try:
+                if hasattr(panel, 'set_title'):
+                    panel.set_title(name)
+                elif hasattr(panel, 'setWindowTitle'):
+                    panel.setWindowTitle(name)
+                else:
+                    pass  # CCTV 이름 설정 불가능
+            except Exception as e:
+                pass  # CCTV 이름 설정 실패
         
         # 그리드에 배치
         idx = len(self.panels)
@@ -657,25 +665,25 @@ class MainWindow(QtWidgets.QMainWindow):
         """NTIS 카메라 선택 다이얼로그"""
         try:
             # 실제 API 사용 시도
-            print("[GUI] NTIS 실제 API 연동 시도...")
+            # NTIS API 연동 시도
             
             # 먼저 실제 API 연결 확인 (빠른 테스트)
             try:
                 from ..api.ntis_client import get_cctv_list
                 
-                # 작은 범위로 빠른 테스트 (서울 일부)
+                # 넓은 범위로 빠른 테스트 (서울-경기 지역)
                 test_cctv = get_cctv_list(
                     service_key="e94df8972e194e489d6abbd7e7bc3469",
                     type='ex',
                     cctvType=1,
-                    minX=127.0, maxX=127.1,
-                    minY=37.5, maxY=37.6,
+                    minX=127.0, maxX=128.0,
+                    minY=36.0, maxY=38.0,
                     getType='json',
                     endpoint='https://openapi.its.go.kr:9443/cctvInfo'
                 )
                 
                 if test_cctv and len(test_cctv) > 0:
-                    print(f"[GUI] ✅ 실제 API 연결 성공! 테스트 CCTV: {len(test_cctv)}개")
+                    # 실제 API 연결 성공
                     
                     # 실제 CCTV 선택 대화상자 표시
                     from .cctv_dialog import CCTVSelectionDialog
@@ -686,8 +694,7 @@ class MainWindow(QtWidgets.QMainWindow):
                         cctv_name = selected.get('name', 'NTIS CCTV')
                         
                         if stream_url:
-                            print(f"[GUI] 선택된 CCTV: {cctv_name}")
-                            print(f"[GUI] 스트림 URL: {stream_url[:100]}...")
+                            # CCTV 스트림 추가
                             self._add_stream(stream_url, cctv_name)
                         else:
                             QtWidgets.QMessageBox.warning(
@@ -697,7 +704,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     return
                     
             except Exception as api_error:
-                print(f"[GUI] ❌ 실제 API 연결 실패: {api_error}")
+                # API 연결 실패, 시뮤레이션 모드로 전환
                 # API 실패 시 시뮬레이션 모드로 fallback
                 pass
             
@@ -719,7 +726,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self._show_simulation_dialog()
                     
         except Exception as e:
-            print(f"[GUI] NTIS 대화상자 오류: {e}")
+            # NTIS 대화상자 오류
             QtWidgets.QMessageBox.critical(
                 self, "NTIS 연동 오류",
                 f"NTIS CCTV 연동 중 오류가 발생했습니다:\n\n{e}\n\n"

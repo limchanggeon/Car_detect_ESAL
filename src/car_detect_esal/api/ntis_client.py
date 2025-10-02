@@ -141,9 +141,8 @@ def get_cctv_list(service_key: Optional[str] = None,
     # 추가 파라미터 병합
     params.update({k: v for k, v in kwargs.items() if v is not None})
     
-    print(f"[NTIS] 가이드 기반 API 호출")
-    print(f"[NTIS] URL: {url}")
-    print(f"[NTIS] 파라미터: {json.dumps(params, indent=2, ensure_ascii=False)}")
+    # API 호출 정보 (필요시 활성화)
+    # print(f"[NTIS] API 호출: {url}")
 
     # 향상된 요청 헤더
     headers = {
@@ -161,7 +160,7 @@ def get_cctv_list(service_key: Optional[str] = None,
     
     for i, try_url in enumerate(endpoints_to_try, 1):
         try:
-            print(f"[NTIS] 시도 {i}/{len(endpoints_to_try)}: {try_url}")
+            # print(f"[NTIS] 시도 {i}/{len(endpoints_to_try)}: {try_url}")
             
             # 엔드포인트별 파라미터 조정
             current_params = params.copy()
@@ -188,12 +187,12 @@ def get_cctv_list(service_key: Optional[str] = None,
                 allow_redirects=True
             )
             
-            print(f"[NTIS] 응답 상태: {resp.status_code}")
-            print(f"[NTIS] 응답 크기: {len(resp.text)} bytes")
-            print(f"[NTIS] Content-Type: {resp.headers.get('Content-Type', 'N/A')}")
+            # 응답 정보 (성공시에만 필요시 출력)
+            if resp.status_code != 200:
+                print(f"[NTIS] HTTP {resp.status_code} 오류")
             
             if resp.status_code == 200:
-                print(f"[NTIS] ✅ 성공: {try_url}")
+                # API 호출 성공
                 break
             else:
                 print(f"[NTIS] ❌ HTTP 오류 {resp.status_code}")
@@ -241,20 +240,12 @@ def get_cctv_list(service_key: Optional[str] = None,
             # 실제 NTIS API 응답 구조 처리
             response = data.get('response', {})
             if response:
-                print(f"[NTIS] 응답 구조 확인 완료")
-                
                 # 실제 응답에서 data 필드 확인
                 cctv_data = response.get('data', [])
                 if isinstance(cctv_data, list) and len(cctv_data) > 0:
                     candidates.append(cctv_data)
-                    print(f"[NTIS] CCTV 데이터 발견: {len(cctv_data)}개")
                 elif isinstance(cctv_data, dict):
                     candidates.append([cctv_data])
-                    print(f"[NTIS] CCTV 데이터 발견: 1개")
-                
-                # 좌표 타입도 저장
-                coord_type = response.get('coordtype', 1)
-                print(f"[NTIS] 좌표 타입: {coord_type}")
             
             # 공공데이터포털 표준 응답 구조도 확인
             if 'header' in data:

@@ -1,8 +1,0 @@
-ultralytics
-opencv-python
-PyQt5
-PyQtWebEngine
-numpy
-
-# Note: ultralytics depends on torch/torchvision. For GPU installs, follow
-# PyTorch instructions at https://pytorch.org to get the proper CUDA wheel.
