@@ -7,6 +7,7 @@ import math
 from PyQt5 import QtCore, QtGui
 from typing import Optional, Tuple, Dict
 from ..core.detector import VehicleDetector, VehicleTracker
+from ..database import TrafficDatabaseManager
 
 class StreamWorker(QtCore.QThread):
     """
@@ -20,7 +21,8 @@ class StreamWorker(QtCore.QThread):
     status = QtCore.pyqtSignal(str)
     count_changed = QtCore.pyqtSignal(object)  # Dict[str, int]
 
-    def __init__(self, source: str, detector: VehicleDetector, performance_config: dict = None):
+    def __init__(self, source: str, detector: VehicleDetector, performance_config: dict = None, 
+                 db_manager: TrafficDatabaseManager = None, camera_id: str = None):
         super().__init__()
         self.source = source
         self.detector = detector
@@ -37,6 +39,12 @@ class StreamWorker(QtCore.QThread):
         
         # 차량 추적기
         self.tracker = VehicleTracker()
+        
+        # 데이터베이스 관련
+        self.db_manager = db_manager
+        self.camera_id = camera_id or f"cam_{int(time.time())}"
+        self.detection_buffer = []  # 탐지 결과 버퍼
+        self.last_db_save = time.time()
         
         # FPS 측정용 변수들
         self.fps_counter = 0
@@ -109,11 +117,17 @@ class StreamWorker(QtCore.QThread):
             # 프레임을 성능 설정에 따른 해상도로 리사이즈 (속도 최적화)
             target_size = self.performance_config.get("imgsz", 640)
             h, w = frame.shape[:2]
+            original_frame_size = (w, h)  # 데이터베이스 저장용 원본 크기
+            
             if w != target_size or h != target_size:
                 frame = cv2.resize(frame, (target_size, target_size), interpolation=cv2.INTER_LINEAR)
             
             # 탐지 수행
             annotated, results = self.detector.detect(frame, self.roi)
+            
+            # 데이터베이스 저장을 위한 탐지 결과 처리
+            if results is not None and self.db_manager:
+                self._save_detections_to_db(results, original_frame_size)
             
             # 카운팅 로직 (roi가 있을 때만)
             if self.roi and results is not None:
@@ -166,6 +180,101 @@ class StreamWorker(QtCore.QThread):
             print(f"[StreamWorker] 탐지 추출 오류: {e}")
         
         return detections
+
+    def _save_detections_to_db(self, results, original_frame_size):
+        """탐지 결과를 데이터베이스에 저장"""
+        try:
+            if not self.db_manager or not results:
+                return
+                
+            boxes = getattr(results[0], 'boxes', None)
+            names = getattr(results[0], 'names', {})
+            
+            if boxes is None or not hasattr(boxes, 'xyxy'):
+                return
+                
+            # 탐지 결과 추출
+            detections_for_db = []
+            xyxy = boxes.xyxy.tolist() if hasattr(boxes.xyxy, 'tolist') else []
+            cls_list = boxes.cls.tolist() if hasattr(boxes, 'cls') and hasattr(boxes.cls, 'tolist') else []
+            conf_list = boxes.conf.tolist() if hasattr(boxes, 'conf') and hasattr(boxes.conf, 'tolist') else []
+            
+            frame_width, frame_height = original_frame_size
+            
+            for i, bbox in enumerate(xyxy):
+                if len(bbox) < 4:
+                    continue
+                    
+                x1, y1, x2, y2 = bbox[:4]
+                
+                # 정규화된 좌표로 변환 (0.0 ~ 1.0)
+                norm_x = (x1 + x2) / 2.0 / frame_width
+                norm_y = (y1 + y2) / 2.0 / frame_height
+                norm_width = (x2 - x1) / frame_width
+                norm_height = (y2 - y1) / frame_height
+                
+                # 클래스 정보 추출
+                vehicle_class = int(cls_list[i]) if i < len(cls_list) else 0
+                vehicle_type = str(names.get(vehicle_class, 'unknown'))
+                confidence = float(conf_list[i]) if i < len(conf_list) else 0.0
+                
+                # 신뢰도가 낮은 탐지는 제외
+                if confidence < 0.5:
+                    continue
+                
+                # 차량 타입 매핑 (YOLO 클래스를 표준 차량 타입으로 변환)
+                vehicle_type_map = {
+                    'car': 'car',
+                    'motorcycle': 'motorbike',
+                    'bus': 'bus',
+                    'truck': 'truck',
+                    'bicycle': 'motorbike',  # 자전거는 오토바이로 분류
+                    'van': 'van'
+                }
+                
+                standardized_type = vehicle_type_map.get(vehicle_type.lower(), 'car')
+                
+                detection_data = {
+                    'vehicle_type': standardized_type,
+                    'vehicle_class': vehicle_class,
+                    'confidence': confidence,
+                    'bbox': [norm_x, norm_y, norm_width, norm_height],
+                    'frame_number': self.fps_counter,
+                    'roi_id': None,  # ROI 기능 추가 시 설정
+                    'roi_name': None
+                }
+                
+                detections_for_db.append(detection_data)
+            
+            # 탐지 결과를 버퍼에 추가
+            if detections_for_db:
+                self.detection_buffer.extend(detections_for_db)
+            
+            # 일정 시간마다 또는 버퍼가 가득 찰 때 데이터베이스에 저장
+            current_time = time.time()
+            buffer_full = len(self.detection_buffer) >= 50  # 50개씩 배치 저장
+            time_to_save = (current_time - self.last_db_save) >= 30  # 30초마다 저장
+            
+            if (buffer_full or time_to_save) and self.detection_buffer:
+                try:
+                    success = self.db_manager.record_vehicle_detection(
+                        self.camera_id, 
+                        self.detection_buffer
+                    )
+                    
+                    if success:
+                        saved_count = len(self.detection_buffer)
+                        self.detection_buffer.clear()
+                        self.last_db_save = current_time
+                        print(f"✅ 데이터베이스에 {saved_count}건 탐지 결과 저장 완료")
+                    else:
+                        print("❌ 데이터베이스 저장 실패")
+                        
+                except Exception as e:
+                    print(f"❌ 데이터베이스 저장 중 오류: {e}")
+                    
+        except Exception as e:
+            print(f"[StreamWorker] 데이터베이스 저장 처리 오류: {e}")
 
     def _frame_to_qimage(self, frame) -> Optional[QtGui.QImage]:
         """OpenCV 프레임을 QImage로 변환"""

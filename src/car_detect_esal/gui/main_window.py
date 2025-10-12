@@ -10,6 +10,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from ..core import Config, VehicleDetector
 from ..core.performance_config import PerformanceConfig
 from ..api import get_cctv_list
+from ..database import TrafficDatabaseManager
 from .stream_panel import StreamPanel
 
 try:
@@ -49,6 +50,14 @@ class MainWindow(QtWidgets.QMainWindow):
         
         # 현재 성능 설정 (나노모델을 위해 fast를 기본으로)
         self.current_performance_preset = "fast"
+        
+        # 데이터베이스 관리자 초기화
+        try:
+            self.db_manager = TrafficDatabaseManager("data/traffic_data.db")
+            print("✅ 데이터베이스 초기화 완료")
+        except Exception as e:
+            print(f"⚠️ 데이터베이스 초기화 실패: {e}")
+            self.db_manager = None
         
         self._setup_ui()
         self._load_default_model()
@@ -197,6 +206,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self._create_control_panel(right_layout)
         self._create_settings_panel(right_layout)
         self._create_performance_panel(right_layout)
+        
+        # 데이터베이스 패널 추가
+        if self.db_manager:
+            self._create_database_panel(right_layout)
         
         # 탐지 화면 영역을 왼쪽에 배치 (메인)
         self._create_stream_area(left_layout)
@@ -463,6 +476,52 @@ class MainWindow(QtWidgets.QMainWindow):
         self.perf_combo.currentIndexChanged.connect(self._on_performance_preset_changed)
         self.apply_perf_btn.clicked.connect(self._apply_performance_settings)
 
+    def _create_database_panel(self, parent_layout):
+        """데이터베이스 패널 생성"""
+        from .database_panel import DatabaseStatsWidget, ESALAnalysisWidget
+        
+        # 탭 위젯으로 데이터베이스 기능들을 구분
+        db_tabs = QtWidgets.QTabWidget()
+        db_tabs.setStyleSheet("""
+            QTabWidget::pane {
+                border: 2px solid rgba(255, 255, 255, 0.2);
+                border-radius: 8px;
+                background: rgba(255, 255, 255, 0.95);
+            }
+            QTabBar::tab {
+                background: rgba(102, 126, 234, 0.1);
+                border: 1px solid rgba(102, 126, 234, 0.3);
+                padding: 8px 12px;
+                margin-right: 2px;
+                border-radius: 8px 8px 0px 0px;
+                font-weight: bold;
+                font-size: 11px;
+            }
+            QTabBar::tab:selected {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #667eea, stop:1 #764ba2);
+                color: white;
+            }
+            QTabBar::tab:hover:!selected {
+                background: rgba(102, 126, 234, 0.2);
+            }
+        """)
+        
+        # 데이터베이스 통계 탭
+        stats_widget = DatabaseStatsWidget(self.db_manager)
+        db_tabs.addTab(stats_widget, "📊 통계")
+        
+        # ESAL 분석 탭
+        esal_widget = ESALAnalysisWidget(self.db_manager)
+        db_tabs.addTab(esal_widget, "⚖️ ESAL")
+        
+        # 그룹박스로 감싸기
+        db_group = QtWidgets.QGroupBox("🗄️ 데이터베이스")
+        db_layout = QtWidgets.QVBoxLayout(db_group)
+        db_layout.addWidget(db_tabs)
+        
+        parent_layout.addWidget(db_group)
+
     def _update_performance_info(self):
         """성능 설정 정보 업데이트"""
         preset_name = self.current_performance_preset
@@ -626,9 +685,39 @@ class MainWindow(QtWidgets.QMainWindow):
         from ..core.performance_config import PerformanceConfig
         perf_config = PerformanceConfig.get_preset(self.current_performance_preset)
         
-        panel = StreamPanel(source, self.detector, perf_config)
+        # 카메라 ID 생성 (데이터베이스용)
+        import time
+        camera_id = f"cam_{len(self.panels)+1}_{int(time.time())}"
         
-        # CCTV 이름이 제공된 경우 패널에 표시 (StreamPanel에 set_title 메서드가 있는지 확인)
+        # 데이터베이스에 카메라 정보 등록
+        if self.db_manager:
+            try:
+                camera_name = name or f"Camera {len(self.panels)+1}"
+                location = "Unknown Location"  # 추후 NTIS API에서 위치 정보 추출 가능
+                
+                # NTIS CCTV인 경우 추가 정보 설정
+                if source.startswith('http') and 'its.go.kr' in source:
+                    location = "NTIS CCTV Location"
+                elif source.endswith(('.mp4', '.avi', '.mov', '.mkv')):
+                    location = "Demo Video"
+                
+                self.db_manager.add_camera_stream(
+                    camera_id=camera_id,
+                    name=camera_name,
+                    location=location,
+                    stream_url=source,
+                    road_type="unknown",
+                    is_active=True
+                )
+                print(f"✅ 카메라 정보 데이터베이스 등록: {camera_id} - {camera_name}")
+                
+            except Exception as e:
+                print(f"⚠️ 카메라 정보 데이터베이스 등록 실패: {e}")
+        
+        # StreamPanel 생성 (데이터베이스 매니저와 카메라 ID 전달)
+        panel = StreamPanel(source, self.detector, perf_config, self.db_manager, camera_id)
+        
+        # CCTV 이름이 제공된 경우 패널에 표시
         if name:
             try:
                 if hasattr(panel, 'set_title'):

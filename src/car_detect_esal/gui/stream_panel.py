@@ -12,7 +12,8 @@ from ..core.esal_calculator import ESALCalculator
 class StreamPanel(QtWidgets.QWidget):
     """단일 스트림을 위한 패널 위젯"""
     
-    def __init__(self, source: str, detector: VehicleDetector, performance_config: dict = None):
+    def __init__(self, source: str, detector: VehicleDetector, performance_config: dict = None, 
+                 db_manager=None, camera_id: str = None):
         super().__init__()
         self.source = source
         self.detector = detector
@@ -20,6 +21,10 @@ class StreamPanel(QtWidgets.QWidget):
         self.roi = None
         self.worker = None
         self.esal_calculator = ESALCalculator()
+        
+        # 데이터베이스 관련
+        self.db_manager = db_manager
+        self.camera_id = camera_id
         
         self._setup_ui()
         self._connect_signals()
@@ -298,7 +303,15 @@ class StreamPanel(QtWidgets.QWidget):
         if self.worker is not None and self.worker.isRunning():
             return
             
-        self.worker = StreamWorker(self.source, self.detector, self.performance_config)
+        # 데이터베이스 매니저와 카메라 ID를 포함하여 StreamWorker 생성
+        self.worker = StreamWorker(
+            self.source, 
+            self.detector, 
+            self.performance_config,
+            self.db_manager,
+            self.camera_id
+        )
+        
         self.worker.frame_ready.connect(self.on_frame)
         self.worker.status.connect(self.on_status)
         self.worker.count_changed.connect(self.on_count_changed)
