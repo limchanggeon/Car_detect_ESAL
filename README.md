@@ -40,10 +40,12 @@
 - **2,990개 이상의 실시간 CCTV** 접근 가능
 - 고속도로 및 국도 전국 네트워크 커버리지
 
-### 📈 교통량 분석 및 통계
+### � 교통량 분석 및 통계
 - 실시간 차량 카운팅 및 분류
+- **객체 추적 기반 중복 제거** - 같은 차량을 여러 번 카운팅하지 않음
 - 시간대별, 차종별 교통량 통계 생성
 - **ESAL(Equivalent Single Axle Load) 자동 계산**
+- **MariaDB 기반 영구 데이터 저장**
 
 ### �️ 직관적인 사용자 인터페이스
 - **PyQt5 기반 현대적 GUI**
@@ -64,6 +66,8 @@
 
 ### Backend & API
 - **Python 3.9+**
+- **MariaDB 12.0+** Database System
+- **PyMySQL** MySQL Connector
 - **Requests** HTTP API Client
 - **NTIS Open API** Integration
 
@@ -233,6 +237,14 @@ python main.py
 - **프로젝트 홈**: https://github.com/limchanggeon/Car_detect_ESAL
 
 ## 🔄 업데이트 로그
+
+### v1.1.0 (2025-11-13) - 🎯 최적화 및 중복 제거
+- ✅ **객체 추적 시스템** - 프레임마다 저장하지 않고 새로운 차량만 DB 저장
+- ✅ **중복 탐지 방지** - Track ID 기반 중복 제거 (3초 TTL, 100px 임계값)
+- ✅ **성능 개선** - 배치 저장 최적화 (20개/10초 간격)
+- ✅ **데이터베이스 최적화** - TRUNCATE 기반 빠른 초기화
+- ✅ **코드 정리** - 불필요한 백업 파일 및 미사용 컴포넌트 제거
+- ✅ **MariaDB 완전 통합** - SQLite에서 MariaDB로 전환 완료
 
 ### v1.0.0 (2025-10-02)
 - ✅ **NTIS API 완전 통합** - 2,990개 실시간 CCTV 지원
