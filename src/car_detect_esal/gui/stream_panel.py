@@ -33,270 +33,141 @@ class StreamPanel(QtWidgets.QWidget):
         """UI 구성 요소 설정"""
         # 메인 레이아웃
         self.layout = QtWidgets.QVBoxLayout()
-        self.layout.setContentsMargins(10, 10, 10, 10)
-        self.layout.setSpacing(8)
+        self.layout.setContentsMargins(4, 4, 4, 4)
+        self.layout.setSpacing(4)
         self.setLayout(self.layout)
         
-        # 프리미엄 카드 디자인 with glassmorphism effects and 한글 폰트 지원
+        # 심플하고 깔끔한 다크 테마
         self.setStyleSheet("""
             StreamPanel {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(255, 255, 255, 0.9), stop:1 rgba(248, 250, 252, 0.8));
-                border-radius: 20px;
-                border: 2px solid rgba(255, 255, 255, 0.3);
-                margin: 10px;
-                padding: 20px;
-                font-family: "SF Pro Display", "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
-            }
-            StreamPanel:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(255, 255, 255, 0.95), stop:1 rgba(248, 250, 252, 0.9));
-                border: 2px solid rgba(102, 126, 234, 0.4);
+                background: #1e1e1e;
+                border: 1px solid #3d3d3d;
+                border-radius: 4px;
             }
             QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #667eea, stop:1 #764ba2);
-                color: white;
-                border: none;
-                padding: 10px 20px;
-                border-radius: 8px;
-                font-weight: 600;
-                font-size: 12px;
-                font-family: "SF Pro Display", "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
-                min-height: 25px;
+                background: #2d2d2d;
+                color: #e0e0e0;
+                border: 1px solid #3d3d3d;
+                padding: 4px 8px;
+                border-radius: 3px;
+                font-size: 11px;
+                min-height: 20px;
             }
             QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #5a6fd8, stop:1 #6a4c93);
+                background: #3d3d3d;
+                border: 1px solid #4d4d4d;
             }
             QPushButton:pressed {
-                background: #3d8b40;
+                background: #252525;
             }
             QPushButton:disabled {
-                background: #cccccc;
+                background: #252525;
                 color: #666666;
             }
             QLabel {
-                color: #333;
+                color: #e0e0e0;
+                font-size: 11px;
             }
         """)
 
-        # 제목 라벨
-        self.title_label = QtWidgets.QLabel(f"📹 {self.source}")
-        self.title_label.setAlignment(QtCore.Qt.AlignCenter)
-        self.title_label.setStyleSheet("""
-            QLabel {
-                font-size: 18px;
-                font-weight: 800;
-                font-family: "SF Pro Display", "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
-                color: #2c3e50;
-                padding: 10px;
-                border-radius: 10px;
-                text-align: center;
-            }
-        """)
-        self.layout.addWidget(self.title_label)
+        # 상단 정보바 (URL + 상태)
+        info_layout = QtWidgets.QHBoxLayout()
+        info_layout.setSpacing(8)
+        
+        # URL 라벨 (짧게 표시)
+        source_name = self.source.split('/')[-1] if '/' in self.source else self.source
+        if len(source_name) > 30:
+            source_name = source_name[:27] + "..."
+        self.title_label = QtWidgets.QLabel(source_name)
+        self.title_label.setStyleSheet("font-weight: bold; color: #a0a0a0;")
+        info_layout.addWidget(self.title_label)
+        
+        info_layout.addStretch()
+        
+        # ROI 상태 라벨
+        self.roi_label = QtWidgets.QLabel("Full Frame")
+        self.roi_label.setStyleSheet("color: #4CAF50; font-size: 10px; font-weight: bold;")
+        self.roi_label.setToolTip("Drag to select ROI | Double-click to reset")
+        info_layout.addWidget(self.roi_label)
+        
+        # 상태 라벨
+        self.status_label = QtWidgets.QLabel("Ready")
+        self.status_label.setStyleSheet("color: #808080; font-size: 10px;")
+        info_layout.addWidget(self.status_label)
+        
+        self.layout.addLayout(info_layout)
 
-        # 비디오 영역 (고정 크기 800x600)
+        # 비디오 영역 (유연한 크기, 비율 유지)
         self.video = VideoLabel()
-        # VideoLabel이 이미 setFixedSize(800, 600)로 설정되어 있음
-        self.layout.addWidget(self.video, alignment=QtCore.Qt.AlignCenter)
+        self.video.setMinimumSize(320, 240)
+        self.video.setStyleSheet("background: #000000; border: 1px solid #2d2d2d;")
+        self.layout.addWidget(self.video)
 
+        # 하단 컨트롤바 (버튼 + 통계)
+        bottom_layout = QtWidgets.QHBoxLayout()
+        bottom_layout.setSpacing(4)
+        
         # 컨트롤 버튼들
-        control_layout = QtWidgets.QHBoxLayout()
-        self.start_btn = QtWidgets.QPushButton("▶️ 시작")
-        self.stop_btn = QtWidgets.QPushButton("⏹️ 중지")
+        self.start_btn = QtWidgets.QPushButton("Start")
+        self.start_btn.setStyleSheet("""
+            QPushButton {
+                background: #2d5016;
+                border: 1px solid #3d6026;
+            }
+            QPushButton:hover {
+                background: #3d6026;
+            }
+        """)
+        
+        self.stop_btn = QtWidgets.QPushButton("Stop")
         self.stop_btn.setEnabled(False)
         self.stop_btn.setStyleSheet("""
             QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #ff6b6b, stop:1 #ee5a52);
-                color: white;
-                border: none;
-                border-radius: 8px;
-                padding: 10px 20px;
-                font-weight: 600;
-                font-size: 12px;
-                font-family: "SF Pro Display", "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
+                background: #5c1a1a;
+                border: 1px solid #6c2a2a;
             }
             QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #ff5252, stop:1 #d32f2f);
+                background: #6c2a2a;
             }
         """)
         
-        control_layout.addWidget(self.start_btn)
-        control_layout.addWidget(self.stop_btn)
-        self.layout.addLayout(control_layout)
+        bottom_layout.addWidget(self.start_btn)
+        bottom_layout.addWidget(self.stop_btn)
         
-        # FPS 및 성능 정보 표시
-        self.fps_label = QtWidgets.QLabel("🎥 FPS: 0.0 | 대기 중...")
-        self.fps_label.setAlignment(QtCore.Qt.AlignCenter)
-        self.fps_label.setStyleSheet("""
-            QLabel {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 rgba(52, 152, 219, 0.1), stop:1 rgba(155, 89, 182, 0.1));
-                border: 2px solid #3498db;
-                border-radius: 10px;
-                padding: 10px;
-                font-size: 14px;
-                font-weight: 700;
-                font-family: "SF Pro Display", "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", monospace;
-                color: #2c3e50;
-            }
-        """)
-        self.layout.addWidget(self.fps_label)
-
-        # 카운터 UI
-        counter_frame = QtWidgets.QFrame()
-        counter_frame.setStyleSheet("""
-            QFrame {
-                background: white;
-                border: 1px solid #ddd;
-                border-radius: 4px;
-                padding: 5px;
-            }
-        """)
-        counter_layout = QtWidgets.QVBoxLayout(counter_frame)
+        bottom_layout.addStretch()
         
-        # 카운트 정보
-        count_info_layout = QtWidgets.QHBoxLayout()
-        self.count_label = QtWidgets.QLabel("📊 총 카운트: 0")
-        self.count_label.setStyleSheet("""
-            QLabel {
-                font-size: 32px;
-                font-weight: 800;
-                font-family: "SF Pro Display", "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
-                color: #667eea;
-                text-align: center;
-                padding: 15px;
-                border-radius: 15px;
-                background-color: rgba(102, 126, 234, 0.1);
-            }
-        """)
+        # FPS 및 통계 라벨
+        self.fps_label = QtWidgets.QLabel("FPS: 0.0")
+        self.fps_label.setStyleSheet("color: #808080; font-size: 10px;")
+        bottom_layout.addWidget(self.fps_label)
         
-        self.reset_btn = QtWidgets.QPushButton("🔄 리셋")
-        self.reset_btn.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #ffa726, stop:1 #ff9800);
-                color: white;
-                border: none;
-                border-radius: 8px;
-                padding: 8px 16px;
-                font-weight: 600;
-                font-size: 11px;
-                font-family: "SF Pro Display", "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #ff9800, stop:1 #f57c00);
-            }
-        """)
+        self.count_label = QtWidgets.QLabel("Count: 0")
+        self.count_label.setStyleSheet("color: #808080; font-size: 10px;")
+        bottom_layout.addWidget(self.count_label)
         
-        self.count_chk = QtWidgets.QCheckBox("카운트 활성화")
-        self.count_chk.setChecked(True)
-        
-        count_info_layout.addWidget(self.count_label)
-        count_info_layout.addStretch()
-        count_info_layout.addWidget(self.count_chk)
-        count_info_layout.addWidget(self.reset_btn)
-        
-        counter_layout.addLayout(count_info_layout)
-
-        # 상세 분석 영역 (스크롤 뷰 추가)
-        analysis_scroll = QtWidgets.QScrollArea()
-        analysis_scroll.setWidgetResizable(True)
-        analysis_scroll.setMaximumHeight(120)  # 높이 제한
-        analysis_scroll.setStyleSheet("""
-            QScrollArea {
-                background: #f9f9f9;
-                border: 1px solid #eee;
-                border-radius: 4px;
-            }
-            QScrollBar:vertical {
-                background: #e0e0e0;
-                width: 10px;
-                border-radius: 5px;
-            }
-            QScrollBar::handle:vertical {
-                background: #bdbdbd;
-                border-radius: 5px;
-                min-height: 20px;
-            }
-        """)
-        
-        analysis_widget = QtWidgets.QWidget()
-        analysis_layout = QtWidgets.QVBoxLayout(analysis_widget)
-        
-        self.breakdown_label = QtWidgets.QLabel("상세 분석이 여기에 표시됩니다")
-        self.breakdown_label.setWordWrap(True)
-        self.breakdown_label.setStyleSheet("""
-            QLabel {
-                background: transparent;
-                padding: 8px;
-                font-family: monospace;
-                font-size: 11px;
-                color: #333;
-            }
-        """)
-        analysis_layout.addWidget(self.breakdown_label)
-        analysis_scroll.setWidget(analysis_widget)
-        counter_layout.addWidget(analysis_scroll)
-
-        # ESAL 점수 및 권고사항 (스크롤 뷰 추가)
-        score_scroll = QtWidgets.QScrollArea()
-        score_scroll.setWidgetResizable(True) 
-        score_scroll.setMaximumHeight(100)  # 높이 제한
-        score_scroll.setStyleSheet("""
-            QScrollArea {
-                background: #e8f5e8;
-                border: 2px solid #4CAF50;
-                border-radius: 4px;
-            }
-            QScrollBar:vertical {
-                background: #c8e6c9;
-                width: 10px;
-                border-radius: 5px;
-            }
-            QScrollBar::handle:vertical {
-                background: #4CAF50;
-                border-radius: 5px;
-                min-height: 20px;
-            }
-        """)
-        
-        score_widget = QtWidgets.QWidget()
-        score_layout = QtWidgets.QVBoxLayout(score_widget)
-        
-        self.score_label = QtWidgets.QLabel("ESAL 분석 결과가 여기에 표시됩니다")
-        self.score_label.setWordWrap(True)
-        self.score_label.setStyleSheet("""
-            QLabel {
-                background: transparent;
-                padding: 8px;
-                font-weight: bold;
-                color: #2e7d32;
-            }
-        """)
-        score_layout.addWidget(self.score_label)
-        score_scroll.setWidget(score_widget)
-        counter_layout.addWidget(score_scroll)
-        
-        self.layout.addWidget(counter_frame)
+        self.layout.addLayout(bottom_layout)
 
     def _connect_signals(self):
         """시그널 연결"""
         self.start_btn.clicked.connect(self.start)
         self.stop_btn.clicked.connect(self.stop)
-        self.reset_btn.clicked.connect(self.reset_count)
         self.video.roi_changed.connect(self.on_roi_changed)
-
+    
     def on_roi_changed(self, roi):
         """ROI 변경 처리"""
         self.roi = roi
         if self.worker is not None:
             self.worker.roi = roi
+        
+        if roi:
+            x, y, w, h = roi
+            self.roi_label.setText(f"ROI: {w}×{h}")
+            self.roi_label.setStyleSheet("color: #FF9800; font-size: 10px; font-weight: bold;")
+            print(f"[StreamPanel] ROI set: x={x}, y={y}, w={w}, h={h}")
+        else:
+            self.roi_label.setText("Full Frame")
+            self.roi_label.setStyleSheet("color: #4CAF50; font-size: 10px; font-weight: bold;")
+            print(f"[StreamPanel] ROI cleared (detecting full frame)")
 
     def start(self):
         """스트림 시작"""
@@ -336,93 +207,28 @@ class StreamPanel(QtWidgets.QWidget):
         """프레임 업데이트"""
         try:
             self.video.set_qimage(qimg)
-            if self.video._orig_size:
-                w, h = self.video._orig_size
-                self.title_label.setText(f"📹 {self.source} | {w}x{h}")
         except Exception as e:
-            print(f"[StreamPanel] 프레임 처리 오류: {e}")
+            print(f"[StreamPanel] Frame error: {e}")
 
     def on_status(self, msg: str):
         """상태 메시지 업데이트"""
-        # FPS 정보를 FPS 라벨에 표시
         self.fps_label.setText(msg)
         
-        # 제목 표시에도 간단한 정보 표시
-        base_title = f"📹 {self.source}"
-        if "실행 중" in msg or "FPS" in msg:
-            # FPS 정보가 있으면 녹색으로 표시
-            self.title_label.setStyleSheet("""
-                QLabel {
-                    font-size: 18px;
-                    font-weight: 800;
-                    font-family: "SF Pro Display", "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
-                    color: #27ae60;
-                    padding: 10px;
-                    border-radius: 10px;
-                    text-align: center;
-                }
-            """)
-        elif "중지" in msg:
-            # 중지 시 빨간색으로
-            self.title_label.setStyleSheet("""
-                QLabel {
-                    font-size: 18px;
-                    font-weight: 800;
-                    font-family: "SF Pro Display", "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
-                    color: #e74c3c;
-                    padding: 10px;
-                    border-radius: 10px;
-                    text-align: center;
-                }
-            """)
-        
-        self.title_label.setText(f"{base_title}")
+        if "Running" in msg or "FPS" in msg:
+            self.status_label.setText("Running")
+            self.status_label.setStyleSheet("color: #4CAF50; font-size: 10px; font-weight: bold;")
+        elif "Stopped" in msg:
+            self.status_label.setText("Stopped")
+            self.status_label.setStyleSheet("color: #f44336; font-size: 10px; font-weight: bold;")
 
     def on_count_changed(self, counts: dict):
         """카운트 변경 처리"""
         try:
-            if not self.count_chk.isChecked():
-                return
-                
             if not isinstance(counts, dict):
                 return
             
-            # 총 카운트 표시
             total = sum(counts.values())
-            self.count_label.setText(f"📊 총 카운트: {total}")
-
-            # ESAL 계산
-            total_score, class_scores = self.esal_calculator.calculate_total_score(counts)
-            
-            # 상세 분석 생성
-            breakdown = self.esal_calculator.get_detailed_breakdown(counts)
-            self.breakdown_label.setText('\n'.join(breakdown) if breakdown else "탐지된 차량이 없습니다")
-            
-            # 보수 권고 생성
-            recommendation = self.esal_calculator.get_maintenance_recommendation(total_score)
-            schedule_info = self.esal_calculator.get_maintenance_schedule_info(total_score)
-            
-            score_text = f"🔍 총 ESAL 점수: {total_score:,.1f}\n"
-            score_text += f"💡 권고사항: {recommendation}"
-            
-            if schedule_info:
-                score_text += f"\n📅 예상 시기: {schedule_info['timing_years']}년 후 ({schedule_info['design_pct']}%)"
-            
-            self.score_label.setText(score_text)
+            self.count_label.setText(f"Count: {total}")
             
         except Exception as e:
-            print(f"[StreamPanel] 카운트 처리 오류: {e}")
-
-    def reset_count(self):
-        """카운트 리셋"""
-        try:
-            if self.worker is not None:
-                self.worker.reset_count()
-            
-            # UI 초기화
-            self.count_label.setText("📊 총 카운트: 0")
-            self.breakdown_label.setText("상세 분석이 여기에 표시됩니다")
-            self.score_label.setText("ESAL 분석 결과가 여기에 표시됩니다")
-            
-        except Exception as e:
-            print(f"[StreamPanel] 리셋 오류: {e}")
+            print(f"[StreamPanel] Count error: {e}")

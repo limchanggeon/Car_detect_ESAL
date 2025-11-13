@@ -19,28 +19,18 @@ class VideoLabel(QtWidgets.QLabel):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.setAlignment(QtCore.Qt.AlignCenter)
-        # 현대적 비디오 디스플레이 스타일링 with gradient borders and 한글 폰트 지원
+        # 심플한 다크 테마
         self.setStyleSheet("""
             VideoLabel {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                    stop:0 rgba(43, 43, 43, 0.95), stop:1 rgba(30, 30, 30, 0.9));
-                border: 3px solid transparent;
-                border-radius: 15px;
-                color: #ecf0f1;
-                font-size: 15px;
-                font-weight: 600;
-                font-family: "SF Pro Display", "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
-            }
-            VideoLabel:hover {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                    stop:0 rgba(102, 126, 234, 0.2), stop:1 rgba(118, 75, 162, 0.2));
-                border: 3px solid qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #667eea, stop:1 #764ba2);
+                background: #000000;
+                border: 1px solid #2d2d2d;
+                color: #808080;
+                font-size: 11px;
             }
         """)
         
-        # 영상 크기 고정 (800x600)
-        self.setFixedSize(800, 600)
+        # 최소 크기만 설정, 유연하게 확장 가능
+        self.setMinimumSize(320, 240)
         
         # 위젯이 가능한 공간을 넓게 차지하도록 확장 정책 설정
         self.setSizePolicy(
@@ -78,8 +68,8 @@ class VideoLabel(QtWidgets.QLabel):
         
         self._orig_size = new_size
         
-        # 고정 크기(800x600)로 스케일링, aspect ratio 유지
-        target_size = QtCore.QSize(800, 600)
+        # 위젯 크기에 맞춰 스케일링, aspect ratio 유지
+        target_size = self.size()
         pix = QtGui.QPixmap.fromImage(qimg).scaled(
             target_size, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation
         )

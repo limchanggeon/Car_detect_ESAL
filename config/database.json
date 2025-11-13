@@ -1,0 +1,15 @@
+{
+  "database": {
+    "type": "mariadb",
+    "host": "localhost",
+    "port": 3306,
+    "user": "traffic_user",
+    "password": "traffic_password",
+    "database": "traffic_db",
+    "charset": "utf8mb4",
+    "autocommit": true,
+    "pool_size": 5,
+    "pool_recycle": 3600
+  },
+  "description": "MariaDB/MySQL 데이터베이스 연결 설정 파일"
+}

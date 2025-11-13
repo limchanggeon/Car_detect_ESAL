@@ -1,45 +1,16 @@
 """
-Main application window
+Simple Main Window - Clean and Minimalist Design
 """
 
 import sys
-import os
-from pathlib import Path
 from PyQt5 import QtCore, QtGui, QtWidgets
-
 from ..core import Config, VehicleDetector
-from ..core.performance_config import PerformanceConfig
-from ..api import get_cctv_list
 from ..database import TrafficDatabaseManager
 from .stream_panel import StreamPanel
 
-try:
-    from PyQt5 import QtWebEngineWidgets, QtWebChannel
-    WEBENGINE_AVAILABLE = True
-except ImportError:
-    WEBENGINE_AVAILABLE = False
-
-
-class NtisFetchWorker(QtCore.QThread):
-    """NTIS에서 CCTV 목록을 가져오는 비동기 워커"""
-    finished = QtCore.pyqtSignal(list)
-    error = QtCore.pyqtSignal(str)
-
-    def __init__(self, service_key: str = None, parent=None):
-        super().__init__(parent)
-        self.service_key = service_key
-        self._running = True
-
-    def run(self):
-        try:
-            lst = get_cctv_list(self.service_key)
-            self.finished.emit(lst)
-        except Exception as e:
-            self.error.emit(str(e))
-
 
 class MainWindow(QtWidgets.QMainWindow):
-    """메인 애플리케이션 윈도우"""
+    """Simple and clean main window"""
     
     def __init__(self):
         super().__init__()
@@ -48,859 +19,954 @@ class MainWindow(QtWidgets.QMainWindow):
         self.panels = []
         self._cols = 2
         
-        # 현재 성능 설정 (나노모델을 위해 fast를 기본으로)
-        self.current_performance_preset = "fast"
-        
-        # 데이터베이스 관리자 초기화
+        # Database
         try:
-            self.db_manager = TrafficDatabaseManager("data/traffic_data.db")
-            print("✅ 데이터베이스 초기화 완료")
+            self.db_manager = TrafficDatabaseManager()
         except Exception as e:
-            print(f"⚠️ 데이터베이스 초기화 실패: {e}")
+            print(f"DB init failed: {e}")
             self.db_manager = None
         
         self._setup_ui()
-        self._load_default_model()
+        self._load_model()
 
     def _setup_ui(self):
-        """UI 구성 요소 설정"""
-        self.setWindowTitle("🚗 Car Detection ESAL Analysis System v1.0")
-        self.setWindowIcon(self._create_app_icon())
-        # 탐지화면 중심의 더 큰 창 크기로 설정
-        self.resize(1400, 1000)
+        """Setup minimalist UI"""
+        self.setWindowTitle("Traffic Detection System")
+        self.resize(1200, 700)
         
-        # 메인 위젯과 수평 레이아웃 (탐지화면 중심)
-        central = QtWidgets.QWidget()
-        self.setCentralWidget(central)
-        main_layout = QtWidgets.QHBoxLayout(central)
-        main_layout.setSpacing(15)
-        main_layout.setContentsMargins(10, 10, 10, 10)
-        
-        # 왼쪽: 탐지 화면 영역 (메인)
-        left_widget = QtWidgets.QWidget()
-        left_layout = QtWidgets.QVBoxLayout(left_widget)
-        left_layout.setContentsMargins(0, 0, 0, 0)
-        
-        # 오른쪽: 컨트롤 패널 (고정 폭)
-        right_widget = QtWidgets.QWidget()
-        right_widget.setFixedWidth(400)  # 고정 폭으로 설정
-        right_layout = QtWidgets.QVBoxLayout(right_widget)
-        right_layout.setContentsMargins(0, 0, 0, 0)
-
-        # 현대적이고 아름다운 애플리케이션 스타일 with 한글 폰트 지원
+        # Dark theme
         self.setStyleSheet("""
             QMainWindow {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #667eea, stop:1 #764ba2);
-                color: #2c3e50;
-                font-family: "SF Pro Display", "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
+                background: #1e1e1e;
+            }
+            QWidget {
+                background: #1e1e1e;
+                color: #e0e0e0;
+                font-family: "SF Pro Display", "Segoe UI", Arial;
+                font-size: 13px;
+            }
+            QPushButton {
+                background: #2d2d2d;
+                border: 1px solid #3d3d3d;
+                border-radius: 4px;
+                padding: 8px 16px;
+                color: #e0e0e0;
+            }
+            QPushButton:hover {
+                background: #3d3d3d;
+                border: 1px solid #4d4d4d;
+            }
+            QPushButton:pressed {
+                background: #252525;
+            }
+            QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {
+                background: #2d2d2d;
+                border: 1px solid #3d3d3d;
+                border-radius: 4px;
+                padding: 6px;
+                color: #e0e0e0;
             }
             QGroupBox {
-                font-weight: 600;
-                font-size: 14px;
-                font-family: "SF Pro Display", "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
-                border: 2px solid rgba(255, 255, 255, 0.2);
-                border-radius: 15px;
-                margin: 15px 5px;
-                padding-top: 15px;
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(255, 255, 255, 0.95), stop:1 rgba(248, 250, 252, 0.9));
+                border: 1px solid #3d3d3d;
+                border-radius: 4px;
+                margin-top: 8px;
+                padding-top: 8px;
+                font-weight: bold;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
-                left: 20px;
-                padding: 5px 15px;
-                color: white;
-                font-family: "SF Pro Display", "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
-                font-weight: bold;
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #667eea, stop:1 #764ba2);
-                border-radius: 10px;
+                left: 10px;
+                padding: 0 5px;
             }
+        """)
+        
+        # Central widget
+        central = QtWidgets.QWidget()
+        self.setCentralWidget(central)
+        layout = QtWidgets.QHBoxLayout(central)
+        layout.setSpacing(0)
+        layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Left: Video area
+        self.video_area = QtWidgets.QWidget()
+        self.video_area.setStyleSheet("background: #000000;")
+        self.video_layout = QtWidgets.QGridLayout(self.video_area)
+        self.video_layout.setSpacing(2)
+        self.video_layout.setContentsMargins(2, 2, 2, 2)
+        
+        # Right: Compact control sidebar
+        sidebar = QtWidgets.QWidget()
+        sidebar.setFixedWidth(280)
+        sidebar.setStyleSheet("background: #252525; border-left: 1px solid #3d3d3d;")
+        sidebar_layout = QtWidgets.QVBoxLayout(sidebar)
+        sidebar_layout.setContentsMargins(12, 12, 12, 12)
+        sidebar_layout.setSpacing(12)
+        
+        # Title
+        title = QtWidgets.QLabel("Control Panel")
+        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #ffffff;")
+        sidebar_layout.addWidget(title)
+        
+        # Add stream section
+        add_group = QtWidgets.QGroupBox("Add Stream")
+        add_layout = QtWidgets.QVBoxLayout(add_group)
+        add_layout.setSpacing(8)
+        
+        self.url_input = QtWidgets.QLineEdit()
+        self.url_input.setPlaceholderText("Enter video URL or path...")
+        add_layout.addWidget(self.url_input)
+        
+        # Input buttons row
+        input_btn_layout = QtWidgets.QHBoxLayout()
+        input_btn_layout.setSpacing(6)
+        
+        browse_btn = QtWidgets.QPushButton("📁 Browse...")
+        browse_btn.setStyleSheet("""
             QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #667eea, stop:1 #764ba2);
-                color: white;
-                border: none;
-                border-radius: 8px;
-                padding: 10px 20px;
-                font-weight: 600;
-                font-size: 13px;
-                font-family: "SF Pro Display", "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
-                min-height: 25px;
+                background: #2d4a5e;
+                border: 1px solid #3d5a6e;
+                font-size: 11px;
+                padding: 6px;
             }
             QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #5a6fd8, stop:1 #6a4c93);
-            }
-            QPushButton:pressed {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #4c63d2, stop:1 #5d4e75);
-            }
-            QPushButton:disabled {
-                background: #bdc3c7;
-                color: #7f8c8d;
-            }
-            QComboBox {
-                border: 2px solid #e1e8ed;
-                border-radius: 8px;
-                padding: 8px 12px;
-                background: white;
-                min-height: 20px;
-                font-size: 13px;
-                font-family: "SF Pro Display", "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
-            }
-            QComboBox:focus {
-                border-color: #667eea;
-            }
-            QComboBox::drop-down {
-                border: none;
-                width: 20px;
-            }
-            QComboBox::down-arrow {
-                border-left: 5px solid transparent;
-                border-right: 5px solid transparent;
-                border-top: 8px solid #667eea;
-                margin-right: 5px;
-            }
-            QSpinBox, QDoubleSpinBox {
-                border: 2px solid #e1e8ed;
-                border-radius: 8px;
-                padding: 8px;
-                background: white;
-                min-height: 20px;
-                font-size: 13px;
-                font-family: "SF Pro Display", "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
-            }
-            QSpinBox:focus, QDoubleSpinBox:focus {
-                border-color: #667eea;
-            }
-            QLabel {
-                color: #2c3e50;
-                font-size: 13px;
-                font-weight: 500;
-                font-family: "SF Pro Display", "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
-            }
-            QScrollArea {
-                border: none;
-                background: transparent;
-            }
-            QScrollBar:vertical {
-                background: rgba(255, 255, 255, 0.1);
-                width: 12px;
-                border-radius: 6px;
-            }
-            QScrollBar::handle:vertical {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #667eea, stop:1 #764ba2);
-                border-radius: 6px;
-                min-height: 20px;
-            }
-            QScrollBar::handle:vertical:hover {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #5a6fd8, stop:1 #6a4c93);
+                background: #3d5a6e;
             }
         """)
+        browse_btn.clicked.connect(self._browse_video)
+        input_btn_layout.addWidget(browse_btn)
         
-        # 컨트롤 패널들을 오른쪽에 배치
-        self._create_control_panel(right_layout)
-        self._create_settings_panel(right_layout)
-        self._create_performance_panel(right_layout)
+        add_btn = QtWidgets.QPushButton("+ Add")
+        add_btn.clicked.connect(self._add_stream)
+        input_btn_layout.addWidget(add_btn)
         
-        # 데이터베이스 패널 추가
-        if self.db_manager:
-            self._create_database_panel(right_layout)
+        add_layout.addLayout(input_btn_layout)
         
-        # 탐지 화면 영역을 왼쪽에 배치 (메인)
-        self._create_stream_area(left_layout)
+        # Demo videos section
+        demo_label = QtWidgets.QLabel("Quick demo videos:")
+        demo_label.setStyleSheet("font-size: 11px; color: #808080; margin-top: 8px;")
+        add_layout.addWidget(demo_label)
         
-        # 레이아웃에 위젯들 추가
-        main_layout.addWidget(left_widget, 3)   # 탐지화면이 더 넓게
-        main_layout.addWidget(right_widget, 1)  # 컨트롤 패널은 좁게
-
-    def _create_app_icon(self):
-        """애플리케이션 아이콘 생성"""
-        pixmap = QtGui.QPixmap(32, 32)
-        pixmap.fill(QtGui.QColor('#4CAF50'))
-        painter = QtGui.QPainter(pixmap)
-        painter.setPen(QtGui.QPen(QtGui.QColor('white'), 2))
-        painter.drawText(pixmap.rect(), QtCore.Qt.AlignCenter, "🚗")
-        painter.end()
-        return QtGui.QIcon(pixmap)
-
-    def _create_control_panel(self, parent_layout):
-        """상단 컨트롤 패널 생성"""
-        control_group = QtWidgets.QGroupBox("📡 스트림 관리")
-        control_layout = QtWidgets.QVBoxLayout(control_group)
+        demo_btn_layout = QtWidgets.QHBoxLayout()
+        demo_btn_layout.setSpacing(6)
         
-        # 스트림 입력
-        input_layout = QtWidgets.QHBoxLayout()
-        
-        self.input_line = QtWidgets.QLineEdit()
-        self.input_line.setPlaceholderText("RTSP URL 또는 비디오 파일 경로를 입력하세요...")
-        self.input_line.setStyleSheet("""
-            QLineEdit {
-                padding: 8px;
-                border: 2px solid #ddd;
-                border-radius: 4px;
-                font-size: 12px;
-            }
-            QLineEdit:focus {
-                border-color: #4CAF50;
-            }
-        """)
-        
-        self.add_btn = QtWidgets.QPushButton("➕ 스트림 추가")
-        self.add_demo_btn = QtWidgets.QPushButton("🎬 데모 비디오")
-        self.ntis_btn = QtWidgets.QPushButton("📡 NTIS 카메라")
-        
-        for btn in [self.add_btn, self.add_demo_btn, self.ntis_btn]:
-            btn.setStyleSheet("""
-                QPushButton {
-                    background: #2196F3;
-                    color: white;
-                    border: none;
-                    padding: 8px 16px;
-                    border-radius: 4px;
-                    font-weight: bold;
-                }
-                QPushButton:hover { background: #1976D2; }
-                QPushButton:pressed { background: #0D47A1; }
-            """)
-        
-        input_layout.addWidget(self.input_line, 3)
-        input_layout.addWidget(self.add_btn)
-        input_layout.addWidget(self.add_demo_btn)
-        input_layout.addWidget(self.ntis_btn)
-        
-        # 전체 제어 버튼
-        global_layout = QtWidgets.QHBoxLayout()
-        self.start_all_btn = QtWidgets.QPushButton("▶️ 모두 시작")
-        self.stop_all_btn = QtWidgets.QPushButton("⏹️ 모두 중지")
-        
-        self.start_all_btn.setStyleSheet("""
+        demo1_btn = QtWidgets.QPushButton("Demo 1")
+        demo1_btn.setStyleSheet("""
             QPushButton {
-                background: #4CAF50;
-                color: white;
-                border: none;
-                padding: 10px 20px;
-                border-radius: 4px;
-                font-weight: bold;
-                font-size: 13px;
+                background: #1a4d2e;
+                border: 1px solid #2d6a4f;
+                font-size: 11px;
+                padding: 6px;
             }
-            QPushButton:hover { background: #45a049; }
+            QPushButton:hover {
+                background: #2d6a4f;
+            }
         """)
+        demo1_btn.clicked.connect(lambda: self._add_demo_video(1))
+        demo_btn_layout.addWidget(demo1_btn)
         
-        self.stop_all_btn.setStyleSheet("""
+        demo2_btn = QtWidgets.QPushButton("Demo 2")
+        demo2_btn.setStyleSheet(demo1_btn.styleSheet())
+        demo2_btn.clicked.connect(lambda: self._add_demo_video(2))
+        demo_btn_layout.addWidget(demo2_btn)
+        
+        demo3_btn = QtWidgets.QPushButton("Demo 3")
+        demo3_btn.setStyleSheet(demo1_btn.styleSheet())
+        demo3_btn.clicked.connect(lambda: self._add_demo_video(3))
+        demo_btn_layout.addWidget(demo3_btn)
+        
+        add_layout.addLayout(demo_btn_layout)
+        
+        sidebar_layout.addWidget(add_group)
+        
+        # Quick actions
+        action_group = QtWidgets.QGroupBox("Quick Actions")
+        action_layout = QtWidgets.QVBoxLayout(action_group)
+        action_layout.setSpacing(6)
+        
+        start_all_btn = QtWidgets.QPushButton("▶ Start All")
+        start_all_btn.setStyleSheet("""
             QPushButton {
-                background: #f44336;
-                color: white;
-                border: none;
-                padding: 10px 20px;
-                border-radius: 4px;
-                font-weight: bold;
-                font-size: 13px;
+                background: #2d5016;
+                border: 1px solid #3d6026;
             }
-            QPushButton:hover { background: #da190b; }
+            QPushButton:hover {
+                background: #3d6026;
+            }
         """)
+        start_all_btn.clicked.connect(self._start_all)
+        action_layout.addWidget(start_all_btn)
         
-        global_layout.addStretch()
-        global_layout.addWidget(self.start_all_btn)
-        global_layout.addWidget(self.stop_all_btn)
-        global_layout.addStretch()
+        stop_all_btn = QtWidgets.QPushButton("■ Stop All")
+        stop_all_btn.setStyleSheet("""
+            QPushButton {
+                background: #501616;
+                border: 1px solid #602626;
+            }
+            QPushButton:hover {
+                background: #602626;
+            }
+        """)
+        stop_all_btn.clicked.connect(self._stop_all)
+        action_layout.addWidget(stop_all_btn)
         
-        control_layout.addLayout(input_layout)
-        control_layout.addLayout(global_layout)
-        parent_layout.addWidget(control_group)
+        clear_btn = QtWidgets.QPushButton("Clear All")
+        clear_btn.clicked.connect(self._clear_all)
+        action_layout.addWidget(clear_btn)
         
-        # 시그널 연결
-        self.add_btn.clicked.connect(self._add_stream_from_input)
-        self.add_demo_btn.clicked.connect(self._select_demo_videos)
-        self.ntis_btn.clicked.connect(self._show_ntis_dialog)
-        self.start_all_btn.clicked.connect(self._start_all)
-        self.stop_all_btn.clicked.connect(self._stop_all)
-
-    def _create_settings_panel(self, parent_layout):
-        """설정 패널 생성"""
-        settings_group = QtWidgets.QGroupBox("⚙️ 탐지 설정")
-        settings_layout = QtWidgets.QHBoxLayout(settings_group)
+        sidebar_layout.addWidget(action_group)
         
-        # 모델 설정
-        model_layout = QtWidgets.QHBoxLayout()
-        model_layout.addWidget(QtWidgets.QLabel("🤖 모델:"))
+        # Settings section
+        settings_group = QtWidgets.QGroupBox("Detection Settings")
+        settings_layout = QtWidgets.QFormLayout(settings_group)
+        settings_layout.setSpacing(8)
         
-        self.model_line = QtWidgets.QLineEdit(str(self.config.DEFAULT_MODEL_PATH))
-        self.model_browse = QtWidgets.QPushButton("📁 찾기")
-        self.model_load = QtWidgets.QPushButton("🔄 로드")
-        
-        model_layout.addWidget(self.model_line, 2)
-        model_layout.addWidget(self.model_browse)
-        model_layout.addWidget(self.model_load)
-        
-        # 탐지 파라미터
-        param_layout = QtWidgets.QHBoxLayout()
-        param_layout.addWidget(QtWidgets.QLabel("📏 이미지 크기:"))
-        
-        self.imgsz_spin = QtWidgets.QSpinBox()
-        self.imgsz_spin.setRange(128, 2048)
-        self.imgsz_spin.setValue(self.config.DEFAULT_IMGSZ)
-        param_layout.addWidget(self.imgsz_spin)
-        
-        param_layout.addWidget(QtWidgets.QLabel("🎯 신뢰도:"))
         self.conf_spin = QtWidgets.QDoubleSpinBox()
-        self.conf_spin.setRange(0.01, 1.0)
-        self.conf_spin.setSingleStep(0.01)
-        self.conf_spin.setValue(self.config.DEFAULT_CONF)
-        param_layout.addWidget(self.conf_spin)
+        self.conf_spin.setRange(0.0, 1.0)
+        self.conf_spin.setSingleStep(0.05)
+        self.conf_spin.setValue(0.5)
+        settings_layout.addRow("Confidence:", self.conf_spin)
         
-        settings_layout.addLayout(model_layout, 2)
-        settings_layout.addLayout(param_layout, 1)
-        parent_layout.addWidget(settings_group)
+        self.iou_spin = QtWidgets.QDoubleSpinBox()
+        self.iou_spin.setRange(0.0, 1.0)
+        self.iou_spin.setSingleStep(0.05)
+        self.iou_spin.setValue(0.45)
+        settings_layout.addRow("IOU:", self.iou_spin)
         
-        # 시그널 연결
-        self.model_browse.clicked.connect(self._browse_model)
-        self.model_load.clicked.connect(self._load_model)
-
-    def _create_performance_panel(self, parent_layout):
-        """성능 최적화 패널 생성"""
-        perf_group = QtWidgets.QGroupBox("⚡ 성능 최적화 (FPS 개선)")
-        perf_layout = QtWidgets.QHBoxLayout(perf_group)
+        sidebar_layout.addWidget(settings_group)
         
-        # 성능 프리셋 선택
-        preset_layout = QtWidgets.QVBoxLayout()
-        preset_layout.addWidget(QtWidgets.QLabel("🚀 성능 프리셋:"))
-        
-        self.perf_combo = QtWidgets.QComboBox()
-        for preset_name in PerformanceConfig.get_preset_names():
-            preset_info = PerformanceConfig.get_preset(preset_name)
-            self.perf_combo.addItem(f"{preset_info['name']}", preset_name)
-        
-        # 기본값을 "fast"로 설정 (나노모델에 더 적합)
-        for i in range(self.perf_combo.count()):
-            if self.perf_combo.itemData(i) == "fast":
-                self.perf_combo.setCurrentIndex(i)
-                break
-        
-        self.perf_combo.setStyleSheet("""
-            QComboBox {
-                background: white;
-                border: 2px solid #ddd;
-                border-radius: 8px;
-                padding: 8px 12px;
-                font-size: 12px;
-                font-weight: 600;
-                min-width: 200px;
-            }
-            QComboBox:hover {
-                border-color: #667eea;
-            }
-            QComboBox::drop-down {
-                border: none;
-                width: 30px;
-            }
+        # Stats section
+        self.stats_label = QtWidgets.QLabel("Streams: 0\nDetections: 0")
+        self.stats_label.setStyleSheet("""
+            padding: 12px;
+            background: #2d2d2d;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #b0b0b0;
         """)
+        self.stats_label.setAlignment(QtCore.Qt.AlignCenter)
+        sidebar_layout.addWidget(self.stats_label)
         
-        preset_layout.addWidget(self.perf_combo)
+        # Database Statistics Section
+        if self.db_manager:
+            db_group = QtWidgets.QGroupBox("Database Stats")
+            db_layout = QtWidgets.QVBoxLayout(db_group)
+            db_layout.setSpacing(4)
+            
+            # Total detections
+            self.db_total_label = QtWidgets.QLabel("Total: 0")
+            self.db_total_label.setStyleSheet("color: #90b0d0; font-size: 11px;")
+            db_layout.addWidget(self.db_total_label)
+            
+            # Today's detections
+            self.db_today_label = QtWidgets.QLabel("Today: 0")
+            self.db_today_label.setStyleSheet("color: #90b0d0; font-size: 11px;")
+            db_layout.addWidget(self.db_today_label)
+            
+            # View details button
+            view_db_btn = QtWidgets.QPushButton("View Details")
+            view_db_btn.setStyleSheet("""
+                QPushButton {
+                    background: #2d4a5e;
+                    border: 1px solid #3d5a6e;
+                    font-size: 11px;
+                    padding: 6px;
+                }
+                QPushButton:hover {
+                    background: #3d5a6e;
+                }
+            """)
+            view_db_btn.clicked.connect(self._show_database_viewer)
+            db_layout.addWidget(view_db_btn)
+            
+            sidebar_layout.addWidget(db_group)
+            
+            # Auto-refresh DB stats
+            self.db_refresh_timer = QtCore.QTimer()
+            self.db_refresh_timer.timeout.connect(self._refresh_db_stats)
+            self.db_refresh_timer.start(5000)  # Every 5 seconds
+            self._refresh_db_stats()  # Initial refresh
         
-        # 현재 설정 표시
-        self.perf_info_label = QtWidgets.QLabel()
-        self.perf_info_label.setWordWrap(True)
-        self.perf_info_label.setStyleSheet("""
-            QLabel {
-                background: #e8f4f8;
-                border: 1px solid #b3d9e6;
-                border-radius: 6px;
-                padding: 8px;
-                font-size: 11px;
-                color: #2c3e50;
-            }
+        # ROI Guide
+        roi_guide = QtWidgets.QLabel("💡 ROI Detection:\nDrag on video to select area\nDouble-click to reset")
+        roi_guide.setStyleSheet("""
+            padding: 8px;
+            background: #2d3d2d;
+            border: 1px solid #3d5d3d;
+            border-radius: 4px;
+            font-size: 10px;
+            color: #90c090;
+            line-height: 1.4;
         """)
+        roi_guide.setAlignment(QtCore.Qt.AlignLeft)
+        roi_guide.setWordWrap(True)
+        sidebar_layout.addWidget(roi_guide)
         
-        # FPS 목표 표시
-        fps_layout = QtWidgets.QVBoxLayout()
-        fps_layout.addWidget(QtWidgets.QLabel("📊 예상 FPS:"))
+        sidebar_layout.addStretch()
         
-        self.fps_target_label = QtWidgets.QLabel("10 FPS")
-        self.fps_target_label.setStyleSheet("""
-            QLabel {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 rgba(76, 175, 80, 0.1), stop:1 rgba(139, 195, 74, 0.1));
-                border: 2px solid #4CAF50;
-                border-radius: 10px;
-                padding: 12px;
-                font-size: 16px;
-                font-weight: bold;
-                color: #2e7d32;
-                text-align: center;
-            }
-        """)
-        fps_layout.addWidget(self.fps_target_label)
+        # DB status at bottom
+        if self.db_manager:
+            db_label = QtWidgets.QLabel("● Database Connected")
+            db_label.setStyleSheet("color: #50a050; font-size: 11px;")
+        else:
+            db_label = QtWidgets.QLabel("○ Database Offline")
+            db_label.setStyleSheet("color: #a05050; font-size: 11px;")
+        db_label.setAlignment(QtCore.Qt.AlignCenter)
+        sidebar_layout.addWidget(db_label)
         
-        # 이제 정보 업데이트 (모든 위젯이 생성된 후)
-        self._update_performance_info()
+        # Add to main layout
+        layout.addWidget(self.video_area, 1)
+        layout.addWidget(sidebar, 0)
         
-        # 적용 버튼
-        self.apply_perf_btn = QtWidgets.QPushButton("✅ 설정 적용")
-        self.apply_perf_btn.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #4CAF50, stop:1 #45a049);
-                color: white;
-                border: none;
-                border-radius: 8px;
-                padding: 12px 24px;
-                font-weight: bold;
-                font-size: 12px;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #45a049, stop:1 #3d8b40);
-            }
-        """)
-        
-        # 레이아웃 구성
-        left_layout = QtWidgets.QVBoxLayout()
-        left_layout.addLayout(preset_layout)
-        left_layout.addWidget(self.perf_info_label)
-        
-        right_layout = QtWidgets.QVBoxLayout()
-        right_layout.addLayout(fps_layout)
-        right_layout.addWidget(self.apply_perf_btn)
-        
-        perf_layout.addLayout(left_layout, 2)
-        perf_layout.addLayout(right_layout, 1)
-        
-        parent_layout.addWidget(perf_group)
-        
-        # 시그널 연결
-        self.perf_combo.currentIndexChanged.connect(self._on_performance_preset_changed)
-        self.apply_perf_btn.clicked.connect(self._apply_performance_settings)
-
-    def _create_database_panel(self, parent_layout):
-        """데이터베이스 패널 생성"""
-        from .database_panel import DatabaseStatsWidget, ESALAnalysisWidget
-        
-        # 탭 위젯으로 데이터베이스 기능들을 구분
-        db_tabs = QtWidgets.QTabWidget()
-        db_tabs.setStyleSheet("""
-            QTabWidget::pane {
-                border: 2px solid rgba(255, 255, 255, 0.2);
-                border-radius: 8px;
-                background: rgba(255, 255, 255, 0.95);
-            }
-            QTabBar::tab {
-                background: rgba(102, 126, 234, 0.1);
-                border: 1px solid rgba(102, 126, 234, 0.3);
-                padding: 8px 12px;
-                margin-right: 2px;
-                border-radius: 8px 8px 0px 0px;
-                font-weight: bold;
-                font-size: 11px;
-            }
-            QTabBar::tab:selected {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #667eea, stop:1 #764ba2);
-                color: white;
-            }
-            QTabBar::tab:hover:!selected {
-                background: rgba(102, 126, 234, 0.2);
-            }
-        """)
-        
-        # 데이터베이스 통계 탭
-        stats_widget = DatabaseStatsWidget(self.db_manager)
-        db_tabs.addTab(stats_widget, "📊 통계")
-        
-        # ESAL 분석 탭
-        esal_widget = ESALAnalysisWidget(self.db_manager)
-        db_tabs.addTab(esal_widget, "⚖️ ESAL")
-        
-        # 그룹박스로 감싸기
-        db_group = QtWidgets.QGroupBox("🗄️ 데이터베이스")
-        db_layout = QtWidgets.QVBoxLayout(db_group)
-        db_layout.addWidget(db_tabs)
-        
-        parent_layout.addWidget(db_group)
-
-    def _update_performance_info(self):
-        """성능 설정 정보 업데이트"""
-        preset_name = self.current_performance_preset
-        preset = PerformanceConfig.get_preset(preset_name)
-        
-        info_text = f"""
-🔧 해상도: {preset['imgsz']}x{preset['imgsz']}
-🎯 신뢰도 임계값: {preset['conf']}
-⏱️ 처리 간격: {preset['sleep_time']}초
-📝 {preset['description']}
-        """.strip()
-        
-        self.perf_info_label.setText(info_text)
-        self.fps_target_label.setText(f"{preset['fps_target']} FPS")
-
-    def _on_performance_preset_changed(self):
-        """성능 프리셋 변경 시"""
-        preset_name = self.perf_combo.currentData()
-        if preset_name:
-            self.current_performance_preset = preset_name
-            self._update_performance_info()
-
-    def _apply_performance_settings(self):
-        """성능 설정 적용"""
-        preset = PerformanceConfig.get_preset(self.current_performance_preset)
-        
-        # 기존 설정 UI 업데이트
-        self.imgsz_spin.setValue(preset['imgsz'])
-        self.conf_spin.setValue(preset['conf'])
-        
-        # 모델 재로드 (새로운 설정으로)
-        if self.detector:
-            try:
-                model_path = self.model_line.text()
-                self.detector = VehicleDetector(
-                    model_path, 
-                    imgsz=preset['imgsz'], 
-                    conf=preset['conf']
-                )
-                
-                # 실행 중인 스트림들에 새 설정 적용
-                for panel in self.panels:
-                    panel.detector = self.detector
-                    panel.performance_config = preset  # 성능 설정도 업데이트
-                    
-                    # 워커가 실행 중이면 새로운 설정으로 재시작
-                    if hasattr(panel, 'worker') and panel.worker and panel.worker.isRunning():
-                        panel.stop()  # 기존 워커 중지
-                        QtCore.QTimer.singleShot(500, panel.start)  # 0.5초 후 새 설정으로 재시작
-                
-                QtWidgets.QMessageBox.information(
-                    self, "설정 적용 완료",
-                    f"✅ {PerformanceConfig.get_preset(self.current_performance_preset)['name']} 설정이 적용되었습니다!\n\n"
-                    f"🔧 해상도: {preset['imgsz']}x{preset['imgsz']}\n"
-                    f"🎯 신뢰도: {preset['conf']}\n"
-                    f"📊 목표 FPS: {preset['fps_target']}"
-                )
-                
-            except Exception as e:
-                QtWidgets.QMessageBox.warning(
-                    self, "설정 적용 오류", 
-                    f"성능 설정 적용 중 오류가 발생했습니다:\n{e}"
-                )
-
-    def _create_stream_area(self, parent_layout):
-        """스트림 패널 영역 생성"""
-        # 스크롤 영역
-        self.scroll = QtWidgets.QScrollArea()
-        self.scroll.setWidgetResizable(True)
-        self.scroll.setStyleSheet("""
-            QScrollArea {
-                border: 1px solid #ddd;
-                border-radius: 4px;
-                background: white;
-            }
-        """)
-        
-        self.panels_widget = QtWidgets.QWidget()
-        self.grid = QtWidgets.QGridLayout(self.panels_widget)
-        self.grid.setSpacing(15)
-        self.grid.setContentsMargins(10, 10, 10, 10)
-        
-        self.scroll.setWidget(self.panels_widget)
-        parent_layout.addWidget(self.scroll, 1)
-
-    def _load_default_model(self):
-        """기본 모델 로드"""
-        model_path = Path(self.model_line.text().strip())
-        if model_path.exists():
-            try:
-                # 현재 성능 설정을 사용해서 모델 로드
-                from ..core.performance_config import PerformanceConfig
-                preset = PerformanceConfig.get_preset(self.current_performance_preset)
-                
-                self.detector = VehicleDetector(
-                    str(model_path),
-                    imgsz=preset['imgsz'],
-                    conf=preset['conf']
-                )
-                        # 기본 모델 로드 완료
-            except Exception as e:
-                print(f"[GUI] 기본 모델 로드 실패: {e}")
-
-    def _browse_model(self):
-        """모델 파일 선택"""
-        file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self, "모델 파일 선택",
-            str(self.config.PROJECT_ROOT / "weights"),
-            "PyTorch Model (*.pt *.pth);;All Files (*)"
-        )
-        if file_path:
-            self.model_line.setText(file_path)
+        # Update timer
+        self.update_timer = QtCore.QTimer()
+        self.update_timer.timeout.connect(self._update_stats)
+        self.update_timer.start(1000)
 
     def _load_model(self):
-        """모델 로드"""
-        model_path = Path(self.model_line.text().strip())
-        if not model_path.exists():
-            QtWidgets.QMessageBox.warning(
-                self, "모델 로드", f"파일을 찾을 수 없습니다: {model_path}"
-            )
-            return
-            
+        """Load detection model"""
         try:
-            # 현재 성능 설정으로 모델 로드
-            from ..core.performance_config import PerformanceConfig
-            preset = PerformanceConfig.get_preset(self.current_performance_preset)
-            
             self.detector = VehicleDetector(
-                str(model_path),
-                imgsz=preset['imgsz'],
-                conf=preset['conf']
+                model_path=str(self.config.DEFAULT_MODEL_PATH),
+                conf=0.5
             )
+            print("Model loaded successfully")
+        except Exception as e:
+            print(f"Model load failed: {e}")
+
+    def _add_stream(self):
+        """Add new video stream"""
+        url = self.url_input.text().strip()
+        if not url:
+            QtWidgets.QMessageBox.warning(self, "Warning", "Please enter a video URL or path")
+            return
+        
+        self._add_video_panel(url)
+
+    def _browse_video(self):
+        """Browse for video file"""
+        file_path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self,
+            "Select Video File",
+            str(self.config.PROJECT_ROOT),  # Start from project root
+            "Video Files (*.mp4 *.avi *.mov *.mkv *.flv *.wmv);;All Files (*.*)"
+        )
+        
+        if file_path:
+            self.url_input.setText(file_path)
+            print(f"Selected video: {file_path}")
+
+    def _add_demo_video(self, demo_num):
+        """Add demo video from local files"""
+        # Look for demo videos in common locations
+        import os
+        from pathlib import Path
+        
+        # Search paths for demo videos
+        search_paths = [
+            self.config.PROJECT_ROOT / "demo_videos",
+            self.config.PROJECT_ROOT / "videos",
+            self.config.PROJECT_ROOT / "samples",
+            Path.home() / "Downloads",
+            Path.home() / "Videos",
+        ]
+        
+        # Demo video filename patterns
+        demo_patterns = [
+            f"demo{demo_num}.mp4",
+            f"demo_{demo_num}.mp4",
+            f"sample{demo_num}.mp4",
+            f"traffic{demo_num}.mp4",
+            f"video{demo_num}.mp4",
+        ]
+        
+        # Search for demo video
+        found_video = None
+        for search_path in search_paths:
+            if search_path.exists():
+                for pattern in demo_patterns:
+                    video_path = search_path / pattern
+                    if video_path.exists():
+                        found_video = str(video_path)
+                        break
+                if found_video:
+                    break
+        
+        if found_video:
+            print(f"Loading Demo Video {demo_num}: {found_video}")
+            self._add_video_panel(found_video)
+        else:
+            # If not found, show file browser
             QtWidgets.QMessageBox.information(
-                self, "모델 로드", 
-                f"모델 로드 완료: {model_path.name}\n"
-                f"성능 설정: {preset['name']}\n"
-                f"해상도: {preset['imgsz']}x{preset['imgsz']}\n"
-                f"신뢰도: {preset['conf']}"
+                self, 
+                "Demo Video Not Found",
+                f"Demo video {demo_num} not found in standard locations.\n\n"
+                f"Please select a video file manually."
             )
-        except Exception as e:
-            QtWidgets.QMessageBox.critical(
-                self, "모델 로드 실패", f"모델 로드 중 오류: {e}"
-            )
-
-    def _add_stream_from_input(self):
-        """입력란에서 스트림 추가"""
-        source = self.input_line.text().strip()
-        if source:
-            self._add_stream(source)
-            self.input_line.clear()
-
-    def _add_stream(self, source: str, name: str = None):
-        """스트림 패널 추가"""
-        if self.detector is None:
-            QtWidgets.QMessageBox.warning(
-                self, "모델 필요", "먼저 탐지 모델을 로드해주세요."
-            )
-            return
-        
-        # 현재 성능 설정 가져오기
-        from ..core.performance_config import PerformanceConfig
-        perf_config = PerformanceConfig.get_preset(self.current_performance_preset)
-        
-        # 카메라 ID 생성 (데이터베이스용)
-        import time
-        camera_id = f"cam_{len(self.panels)+1}_{int(time.time())}"
-        
-        # 데이터베이스에 카메라 정보 등록
-        if self.db_manager:
-            try:
-                camera_name = name or f"Camera {len(self.panels)+1}"
-                location = "Unknown Location"  # 추후 NTIS API에서 위치 정보 추출 가능
-                
-                # NTIS CCTV인 경우 추가 정보 설정
-                if source.startswith('http') and 'its.go.kr' in source:
-                    location = "NTIS CCTV Location"
-                elif source.endswith(('.mp4', '.avi', '.mov', '.mkv')):
-                    location = "Demo Video"
-                
-                self.db_manager.add_camera_stream(
-                    camera_id=camera_id,
-                    name=camera_name,
-                    location=location,
-                    stream_url=source,
-                    road_type="unknown",
-                    is_active=True
-                )
-                print(f"✅ 카메라 정보 데이터베이스 등록: {camera_id} - {camera_name}")
-                
-            except Exception as e:
-                print(f"⚠️ 카메라 정보 데이터베이스 등록 실패: {e}")
-        
-        # StreamPanel 생성 (데이터베이스 매니저와 카메라 ID 전달)
-        panel = StreamPanel(source, self.detector, perf_config, self.db_manager, camera_id)
-        
-        # CCTV 이름이 제공된 경우 패널에 표시
-        if name:
-            try:
-                if hasattr(panel, 'set_title'):
-                    panel.set_title(name)
-                elif hasattr(panel, 'setWindowTitle'):
-                    panel.setWindowTitle(name)
-                else:
-                    pass  # CCTV 이름 설정 불가능
-            except Exception as e:
-                pass  # CCTV 이름 설정 실패
-        
-        # 그리드에 배치
-        idx = len(self.panels)
-        row = idx // self._cols
-        col = idx % self._cols
-        self.grid.addWidget(panel, row, col)
-        
-        self.panels.append(panel)
-
-    def _select_demo_videos(self):
-        """데모 비디오 선택"""
-        demo_dir = self.config.PROJECT_ROOT / "demo_videos"
-        start_dir = str(demo_dir) if demo_dir.exists() else str(Path.cwd())
-        
-        files, _ = QtWidgets.QFileDialog.getOpenFileNames(
-            self, "데모 비디오 선택", start_dir,
-            "Video Files (*.mp4 *.mov *.avi *.mkv);;All Files (*)"
-        )
-        
-        for file_path in files:
-            self._add_stream(file_path)
-
-    def _show_ntis_dialog(self):
-        """NTIS 카메라 선택 다이얼로그"""
+            self._browse_video()
+    
+    def _add_video_panel(self, url):
+        """Add video panel to grid"""
         try:
-            # 실제 API 사용 시도
-            # NTIS API 연동 시도
+            # Generate camera ID from URL
+            import hashlib
+            camera_id = f"cam_{hashlib.md5(url.encode()).hexdigest()[:8]}"
             
-            # 먼저 실제 API 연결 확인 (빠른 테스트)
-            try:
-                from ..api.ntis_client import get_cctv_list
-                
-                # 넓은 범위로 빠른 테스트 (서울-경기 지역)
-                test_cctv = get_cctv_list(
-                    service_key="e94df8972e194e489d6abbd7e7bc3469",
-                    type='ex',
-                    cctvType=1,
-                    minX=127.0, maxX=128.0,
-                    minY=36.0, maxY=38.0,
-                    getType='json',
-                    endpoint='https://openapi.its.go.kr:9443/cctvInfo'
-                )
-                
-                if test_cctv and len(test_cctv) > 0:
-                    # 실제 API 연결 성공
-                    
-                    # 실제 CCTV 선택 대화상자 표시
-                    from .cctv_dialog import CCTVSelectionDialog
-                    dialog = CCTVSelectionDialog(service_key="e94df8972e194e489d6abbd7e7bc3469", parent=self)
-                    if dialog.exec_() == QtWidgets.QDialog.Accepted and dialog.selected_cctv:
-                        selected = dialog.selected_cctv
-                        stream_url = selected.get('stream_url')
-                        cctv_name = selected.get('name', 'NTIS CCTV')
-                        
-                        if stream_url:
-                            # CCTV 스트림 추가
-                            self._add_stream(stream_url, cctv_name)
-                        else:
-                            QtWidgets.QMessageBox.warning(
-                                self, "스트림 오류",
-                                "선택한 CCTV의 스트림 URL이 없습니다."
-                            )
-                    return
-                    
-            except Exception as api_error:
-                # API 연결 실패, 시뮤레이션 모드로 전환
-                # API 실패 시 시뮬레이션 모드로 fallback
-                pass
-            
-            # API 연결 실패 시 사용자에게 선택권 제공
-            result = QtWidgets.QMessageBox.question(
-                self, "NTIS CCTV 연동",
-                "🚨 NTIS 실시간 CCTV 연동\n\n"
-                "실제 API 연결에 문제가 있어 시뮬레이션 모드를 제안합니다.\n\n"
-                "시뮬레이션 모드에서 사용 가능한 옵션:\n"
-                "• � 국가교통정보센터 샘플 CCTV (실제 스트림)\n"
-                "• 🔗 직접 스트림 URL 입력 (RTSP/HTTP)\n"
-                "• 📁 로컬 비디오 파일\n\n"
-                "시뮬레이션 모드로 진행하시겠습니까?",
-                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
-                QtWidgets.QMessageBox.Yes
+            panel = StreamPanel(
+                source=url,
+                detector=self.detector,
+                performance_config={"sleep_time": 0.03, "imgsz": 640},
+                db_manager=self.db_manager,
+                camera_id=camera_id
             )
             
-            if result == QtWidgets.QMessageBox.Yes:
-                self._show_simulation_dialog()
-                    
+            row = len(self.panels) // self._cols
+            col = len(self.panels) % self._cols
+            self.video_layout.addWidget(panel, row, col)
+            
+            self.panels.append(panel)
+            self.url_input.clear()
+            self._update_stats()
+            
         except Exception as e:
-            # NTIS 대화상자 오류
-            QtWidgets.QMessageBox.critical(
-                self, "NTIS 연동 오류",
-                f"NTIS CCTV 연동 중 오류가 발생했습니다:\n\n{e}\n\n"
-                "• 인터넷 연결을 확인해주세요\n"
-                "• 필요한 라이브러리가 설치되어 있는지 확인해주세요"
-            )
-    
-    def _show_simulation_dialog(self):
-        """시뮬레이션 다이얼로그 표시"""
-        try:
-            from .ntis_simulation_dialog import NTISSimulationDialog
-            
-            dialog = NTISSimulationDialog(self)
-            if dialog.exec_() == QtWidgets.QDialog.Accepted:
-                selected_stream = dialog.get_selected_stream()
-                if selected_stream:
-                    self._process_selected_stream(selected_stream)
-        except ImportError as e:
-            QtWidgets.QMessageBox.critical(
-                self, "모듈 오류",
-                f"시뮬레이션 다이얼로그를 로드할 수 없습니다:\n{e}"
-            )
-    
-    def _process_selected_cctv(self, selected_cctv: dict):
-        """선택된 CCTV 처리"""
-        stream_url = selected_cctv.get('stream_url', '')
-        cctv_name = selected_cctv.get('name', 'Unknown CCTV')
-        
-        if not stream_url:
-            QtWidgets.QMessageBox.warning(
-                self, "스트림 URL 없음",
-                f"선택한 CCTV '{cctv_name}'에 스트림 URL이 없습니다.\n\n"
-                "다른 CCTV를 선택해주세요."
-            )
-            return
-        
-        # 스트림 추가
-        self._add_stream(stream_url)
-        
-        # 성공 메시지
-        QtWidgets.QMessageBox.information(
-            self, "CCTV 추가 완료",
-            f"✅ '{cctv_name}' CCTV가 추가되었습니다!\n\n"
-            f"🔗 URL: {stream_url[:50]}{'...' if len(stream_url) > 50 else ''}\n"
-            f"📍 위치: ({selected_cctv.get('coordx', 'N/A')}, {selected_cctv.get('coordy', 'N/A')})\n\n"
-            "▶️ 시작 버튼을 클릭하여 실시간 탐지를 시작하세요."
-        )
-    
-    def _process_selected_stream(self, selected_stream: dict):
-        """선택된 스트림 처리"""  
-        stream_url = selected_stream.get('stream_url', '')
-        stream_name = selected_stream.get('name', 'Unknown Stream')
-        
-        if not stream_url:
-            QtWidgets.QMessageBox.warning(
-                self, "스트림 URL 없음",
-                "스트림 URL이 비어있습니다."
-            )
-            return
-        
-        # 스트림 추가
-        self._add_stream(stream_url)
-        
-        # 성공 메시지
-        QtWidgets.QMessageBox.information(
-            self, "스트림 추가 완료",
-            f"✅ '{stream_name}' 스트림이 추가되었습니다!\n\n"
-            f"🔗 URL: {stream_url[:50]}{'...' if len(stream_url) > 50 else ''}\n"
-            f"📍 위치: {selected_stream.get('location', 'N/A')}\n\n"
-            "▶️ 시작 버튼을 클릭하여 실시간 탐지를 시작하세요."
-        )
+            QtWidgets.QMessageBox.critical(self, "Error", f"Failed to add stream:\n{e}")
+            import traceback
+            traceback.print_exc()
 
     def _start_all(self):
-        """모든 스트림 시작"""
+        """Start all streams"""
         for panel in self.panels:
             if not panel.worker or not panel.worker.isRunning():
                 panel.start()
 
     def _stop_all(self):
-        """모든 스트림 중지"""
+        """Stop all streams"""
         for panel in self.panels:
-            panel.stop()
+            if panel.worker and panel.worker.isRunning():
+                panel.stop()
+
+    def _clear_all(self):
+        """Remove all streams"""
+        reply = QtWidgets.QMessageBox.question(
+            self, "Confirm",
+            "Remove all streams?",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
+        )
+        
+        if reply == QtWidgets.QMessageBox.Yes:
+            for panel in self.panels:
+                if panel.worker and panel.worker.isRunning():
+                    panel.stop()
+                panel.deleteLater()
+            self.panels.clear()
+            self._update_stats()
+
+    def _update_stats(self):
+        """Update statistics display"""
+        total_detections = 0
+        for panel in self.panels:
+            if panel.worker and hasattr(panel.worker, 'total_count'):
+                total_detections += panel.worker.total_count
+        
+        self.stats_label.setText(f"Streams: {len(self.panels)}\nDetections: {total_detections}")
+    
+    def _refresh_db_stats(self):
+        """Refresh database statistics"""
+        if not self.db_manager:
+            return
+        
+        try:
+            from datetime import datetime
+            
+            # Get total detections
+            conn = self.db_manager.get_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("SELECT COUNT(*) as count FROM vehicle_detections")
+            result = cursor.fetchone()
+            total_count = result['count'] if result else 0
+            
+            # Get today's detections
+            today = datetime.now().date()
+            cursor.execute(
+                "SELECT COUNT(*) as count FROM vehicle_detections WHERE DATE(timestamp) = %s",
+                (today,)
+            )
+            result = cursor.fetchone()
+            today_count = result['count'] if result else 0
+            
+            cursor.close()
+            conn.close()
+            
+            self.db_total_label.setText(f"Total: {total_count:,}")
+            self.db_today_label.setText(f"Today: {today_count:,}")
+            
+        except Exception as e:
+            print(f"[MainWindow] DB stats refresh failed: {e}")
+            self.db_total_label.setText("Total: Error")
+            self.db_today_label.setText("Today: Error")
+    
+    def _show_database_viewer(self):
+        """Show database viewer dialog"""
+        if not self.db_manager:
+            QtWidgets.QMessageBox.warning(self, "Warning", "Database not connected")
+            return
+        
+        viewer = DatabaseViewerDialog(self.db_manager, self)
+        viewer.exec_()
 
     def closeEvent(self, event):
-        """애플리케이션 종료 시 정리"""
+        """Handle window close"""
         self._stop_all()
-        # 워커 스레드들이 종료될 시간을 줌
-        QtCore.QTimer.singleShot(500, lambda: super().closeEvent(event))
+        event.accept()
+
+
+class DatabaseViewerDialog(QtWidgets.QDialog):
+    """Database viewer dialog"""
+    
+    def __init__(self, db_manager, parent=None):
+        super().__init__(parent)
+        self.db_manager = db_manager
+        self.setWindowTitle("Database Viewer")
+        self.resize(1100, 650)
+        self._setup_ui()
+        self._refresh_data()
+    
+    def _setup_ui(self):
+        """Setup UI"""
+        layout = QtWidgets.QVBoxLayout(self)
+        
+        # Dark theme
+        self.setStyleSheet("""
+            QDialog {
+                background: #1e1e1e;
+                color: #e0e0e0;
+            }
+            QTableWidget {
+                background: #252525;
+                border: 1px solid #3d3d3d;
+                color: #e0e0e0;
+                gridline-color: #404040;
+                alternate-background-color: #2a2a2a;
+            }
+            QTableWidget::item {
+                padding: 6px;
+                border-bottom: 1px solid #333333;
+            }
+            QTableWidget::item:selected {
+                background: #3d5a6e;
+                color: #ffffff;
+            }
+            QHeaderView::section {
+                background: #1e1e1e;
+                color: #a0a0a0;
+                padding: 8px;
+                border: 1px solid #3d3d3d;
+                font-weight: bold;
+                font-size: 11px;
+            }
+            QPushButton {
+                background: #2d2d2d;
+                border: 1px solid #3d3d3d;
+                border-radius: 4px;
+                padding: 8px 16px;
+                color: #e0e0e0;
+            }
+            QPushButton:hover {
+                background: #3d3d3d;
+            }
+            QComboBox {
+                background: #2d2d2d;
+                border: 1px solid #3d3d3d;
+                border-radius: 4px;
+                padding: 6px;
+                color: #e0e0e0;
+            }
+            QLineEdit {
+                background: #2d2d2d;
+                border: 1px solid #3d3d3d;
+                border-radius: 4px;
+                padding: 6px;
+                color: #e0e0e0;
+            }
+        """)
+        
+        # Top controls
+        controls_layout = QtWidgets.QHBoxLayout()
+        
+        # Filter by vehicle type
+        controls_layout.addWidget(QtWidgets.QLabel("Filter:"))
+        self.filter_combo = QtWidgets.QComboBox()
+        self.filter_combo.addItems(["All", "car", "truck", "bus", "van", "motorbike"])
+        self.filter_combo.currentTextChanged.connect(self._refresh_data)
+        controls_layout.addWidget(self.filter_combo)
+        
+        # Search
+        controls_layout.addWidget(QtWidgets.QLabel("Search:"))
+        self.search_input = QtWidgets.QLineEdit()
+        self.search_input.setPlaceholderText("Camera name...")
+        self.search_input.textChanged.connect(self._refresh_data)
+        controls_layout.addWidget(self.search_input)
+        
+        controls_layout.addStretch()
+        
+        # Clear Database button
+        clear_btn = QtWidgets.QPushButton("Clear DB")
+        clear_btn.setStyleSheet("""
+            QPushButton {
+                background: #5c1a1a;
+                border: 1px solid #7c2a2a;
+            }
+            QPushButton:hover {
+                background: #6c2a2a;
+            }
+        """)
+        clear_btn.clicked.connect(self._clear_database)
+        controls_layout.addWidget(clear_btn)
+        
+        # Refresh button
+        refresh_btn = QtWidgets.QPushButton("Refresh")
+        refresh_btn.clicked.connect(self._refresh_data)
+        controls_layout.addWidget(refresh_btn)
+        
+        # Export button
+        export_btn = QtWidgets.QPushButton("Export CSV")
+        export_btn.clicked.connect(self._export_csv)
+        controls_layout.addWidget(export_btn)
+        
+        layout.addLayout(controls_layout)
+        
+        # Split layout for table and statistics
+        content_layout = QtWidgets.QHBoxLayout()
+        
+        # Main table (left side)
+        table_layout = QtWidgets.QVBoxLayout()
+        table_label = QtWidgets.QLabel("Detection Records")
+        table_label.setStyleSheet("font-weight: bold; font-size: 12px; padding: 4px;")
+        table_layout.addWidget(table_label)
+        
+        self.table = QtWidgets.QTableWidget()
+        self.table.setColumnCount(5)
+        self.table.setHorizontalHeaderLabels([
+            "Timestamp", "Camera", "Vehicle Type", 
+            "Confidence", "ESAL Score"
+        ])
+        self.table.horizontalHeader().setStretchLastSection(True)
+        self.table.setAlternatingRowColors(True)
+        self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        self.table.verticalHeader().setDefaultSectionSize(32)  # Row height
+        self.table.setShowGrid(True)
+        table_layout.addWidget(self.table)
+        
+        content_layout.addLayout(table_layout, 3)  # 70% width
+        
+        # Statistics panel (right side)
+        stats_widget = QtWidgets.QWidget()
+        stats_widget.setFixedWidth(250)
+        stats_layout = QtWidgets.QVBoxLayout(stats_widget)
+        stats_layout.setContentsMargins(8, 0, 0, 0)
+        
+        # Class distribution
+        class_group = QtWidgets.QGroupBox("Detection by Class")
+        class_group.setStyleSheet("""
+            QGroupBox {
+                font-weight: bold;
+                font-size: 11px;
+                padding-top: 8px;
+            }
+        """)
+        class_layout = QtWidgets.QVBoxLayout(class_group)
+        
+        self.class_stats = QtWidgets.QTableWidget()
+        self.class_stats.setColumnCount(2)
+        self.class_stats.setHorizontalHeaderLabels(["Class", "Count"])
+        self.class_stats.horizontalHeader().setStretchLastSection(True)
+        self.class_stats.verticalHeader().setVisible(False)
+        self.class_stats.setMaximumHeight(200)
+        self.class_stats.setAlternatingRowColors(True)
+        self.class_stats.setStyleSheet("""
+            QTableWidget {
+                background: #252525;
+                alternate-background-color: #2a2a2a;
+                gridline-color: #404040;
+                border: 1px solid #3d3d3d;
+            }
+            QTableWidget::item {
+                padding: 6px;
+            }
+            QHeaderView::section {
+                background: #1e1e1e;
+                color: #a0a0a0;
+                padding: 6px;
+                border: 1px solid #3d3d3d;
+                font-weight: bold;
+                font-size: 10px;
+            }
+        """)
+        class_layout.addWidget(self.class_stats)
+        
+        stats_layout.addWidget(class_group)
+        
+        # ESAL Score distribution
+        esal_group = QtWidgets.QGroupBox("ESAL Scores")
+        esal_group.setStyleSheet(class_group.styleSheet())
+        esal_layout = QtWidgets.QVBoxLayout(esal_group)
+        
+        self.esal_stats = QtWidgets.QTextEdit()
+        self.esal_stats.setReadOnly(True)
+        self.esal_stats.setMaximumHeight(180)
+        self.esal_stats.setStyleSheet("""
+            QTextEdit {
+                background: #252525;
+                border: 1px solid #3d3d3d;
+                font-family: "Courier New", monospace;
+                font-size: 10px;
+                padding: 8px;
+                color: #d0d0d0;
+                line-height: 1.3;
+            }
+        """)
+        esal_layout.addWidget(self.esal_stats)
+        
+        stats_layout.addWidget(esal_group)
+        stats_layout.addStretch()
+        
+        content_layout.addWidget(stats_widget, 1)  # 30% width
+        
+        layout.addLayout(content_layout)
+        
+        # Bottom info
+        self.info_label = QtWidgets.QLabel("Loading...")
+        self.info_label.setStyleSheet("color: #808080; font-size: 11px;")
+        layout.addWidget(self.info_label)
+        
+        # Close button
+        close_btn = QtWidgets.QPushButton("Close")
+        close_btn.clicked.connect(self.accept)
+        layout.addWidget(close_btn)
+    
+    def _refresh_data(self):
+        """Refresh table data"""
+        try:
+            from ..core.esal_calculator import ESALCalculator
+            esal_calc = ESALCalculator()
+            
+            conn = self.db_manager.get_connection()
+            cursor = conn.cursor()
+            
+            # Build query
+            query = "SELECT * FROM vehicle_detections WHERE 1=1"
+            params = []
+            
+            # Filter by vehicle type
+            vehicle_filter = self.filter_combo.currentText()
+            if vehicle_filter != "All":
+                query += " AND vehicle_type = %s"
+                params.append(vehicle_filter)
+            
+            # Search by camera name
+            search_text = self.search_input.text().strip()
+            if search_text:
+                query += " AND camera_name LIKE %s"
+                params.append(f"%{search_text}%")
+            
+            query += " ORDER BY timestamp DESC LIMIT 1000"
+            
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+            
+            # Calculate class counts
+            class_counts = {}
+            esal_scores = []
+            
+            # Update main table
+            self.table.setRowCount(len(rows))
+            for i, row in enumerate(rows):
+                vehicle_type = row['vehicle_type'] or 'unknown'
+                
+                # Count by class
+                class_counts[vehicle_type] = class_counts.get(vehicle_type, 0) + 1
+                
+                # Calculate ESAL score for this detection
+                esal_score = esal_calc._get_score_per_vehicle(vehicle_type)
+                esal_scores.append((vehicle_type, esal_score))
+                
+                # Fill table
+                self.table.setItem(i, 0, QtWidgets.QTableWidgetItem(
+                    str(row['timestamp']) if row['timestamp'] else 'N/A'
+                ))
+                self.table.setItem(i, 1, QtWidgets.QTableWidgetItem(
+                    row['camera_name'] or 'Unknown'
+                ))
+                self.table.setItem(i, 2, QtWidgets.QTableWidgetItem(
+                    vehicle_type
+                ))
+                self.table.setItem(i, 3, QtWidgets.QTableWidgetItem(
+                    f"{row['confidence']:.2f}" if row['confidence'] else 'N/A'
+                ))
+                self.table.setItem(i, 4, QtWidgets.QTableWidgetItem(
+                    f"{esal_score:.2f}"
+                ))
+            
+            # Update class statistics table
+            self.class_stats.setRowCount(len(class_counts))
+            sorted_classes = sorted(class_counts.items(), key=lambda x: x[1], reverse=True)
+            for i, (vehicle_class, count) in enumerate(sorted_classes):
+                self.class_stats.setItem(i, 0, QtWidgets.QTableWidgetItem(vehicle_class))
+                count_item = QtWidgets.QTableWidgetItem(f"{count:,}")
+                count_item.setTextAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+                self.class_stats.setItem(i, 1, count_item)
+            
+            # Update ESAL statistics
+            esal_text = "ESAL Score by Vehicle Type:\n\n"
+            esal_by_class = {}
+            for vtype, score in esal_scores:
+                if vtype not in esal_by_class:
+                    esal_by_class[vtype] = []
+                esal_by_class[vtype].append(score)
+            
+            for vtype in sorted(esal_by_class.keys()):
+                scores = esal_by_class[vtype]
+                avg_score = sum(scores) / len(scores)
+                total_score = sum(scores)
+                esal_text += f"{vtype:12s}: {avg_score:6.2f} avg\n"
+                esal_text += f"{'':12s}  {total_score:6.2f} total\n\n"
+            
+            total_esal = sum(score for _, score in esal_scores)
+            esal_text += f"{'─' * 25}\n"
+            esal_text += f"{'Total ESAL':12s}: {total_esal:6.2f}\n"
+            
+            self.esal_stats.setText(esal_text)
+            
+            self.info_label.setText(f"Showing {len(rows)} records (max 1000) | Total ESAL: {total_esal:.2f}")
+            
+            cursor.close()
+            conn.close()
+            
+        except Exception as e:
+            print(f"[DatabaseViewer] Refresh failed: {e}")
+            import traceback
+            traceback.print_exc()
+            self.info_label.setText(f"Error: {e}")
+    
+    def _export_csv(self):
+        """Export table to CSV"""
+        try:
+            from datetime import datetime
+            
+            file_path, _ = QtWidgets.QFileDialog.getSaveFileName(
+                self,
+                "Export to CSV",
+                f"detections_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                "CSV Files (*.csv)"
+            )
+            
+            if not file_path:
+                return
+            
+            import csv
+            with open(file_path, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                
+                # Header
+                headers = []
+                for col in range(self.table.columnCount()):
+                    headers.append(self.table.horizontalHeaderItem(col).text())
+                writer.writerow(headers)
+                
+                # Data
+                for row in range(self.table.rowCount()):
+                    row_data = []
+                    for col in range(self.table.columnCount()):
+                        item = self.table.item(row, col)
+                        row_data.append(item.text() if item else '')
+                    writer.writerow(row_data)
+            
+            QtWidgets.QMessageBox.information(
+                self, 
+                "Success", 
+                f"Exported {self.table.rowCount()} records to:\n{file_path}"
+            )
+            
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(
+                self,
+                "Error",
+                f"Export failed:\n{e}"
+            )
+    
+    def _clear_database(self):
+        """Clear all detection records from database"""
+        reply = QtWidgets.QMessageBox.question(
+            self,
+            "Confirm Database Clear",
+            "⚠️ WARNING ⚠️\n\n"
+            "This will DELETE ALL detection records from the database!\n\n"
+            "This action CANNOT be undone.\n\n"
+            "Are you sure you want to continue?",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            QtWidgets.QMessageBox.No
+        )
+        
+        if reply != QtWidgets.QMessageBox.Yes:
+            return
+        
+        # Double confirmation
+        confirm_text, ok = QtWidgets.QInputDialog.getText(
+            self,
+            "Final Confirmation",
+            "Type 'DELETE' to confirm database clear:",
+            QtWidgets.QLineEdit.Normal,
+            ""
+        )
+        
+        if not ok or confirm_text != "DELETE":
+            QtWidgets.QMessageBox.information(
+                self,
+                "Cancelled",
+                "Database clear operation cancelled."
+            )
+            return
+        
+        try:
+            # Get count before deletion using a fresh connection
+            conn1 = self.db_manager.get_connection()
+            cursor1 = conn1.cursor()
+            cursor1.execute("SELECT COUNT(*) as count FROM vehicle_detections")
+            result = cursor1.fetchone()
+            record_count = result['count'] if result else 0
+            cursor1.close()
+            conn1.close()
+            
+            # Use TRUNCATE instead of DELETE for better performance and avoid locking issues
+            conn2 = self.db_manager.get_connection()
+            cursor2 = conn2.cursor()
+            
+            try:
+                # TRUNCATE is faster and avoids row-level locking
+                cursor2.execute("TRUNCATE TABLE vehicle_detections")
+                conn2.commit()
+            except Exception as truncate_error:
+                # If TRUNCATE fails, try DELETE with explicit table lock
+                print(f"[Clear DB] TRUNCATE failed, trying DELETE: {truncate_error}")
+                cursor2.execute("DELETE FROM vehicle_detections")
+                conn2.commit()
+            
+            cursor2.close()
+            conn2.close()
+            
+            QtWidgets.QMessageBox.information(
+                self,
+                "Success",
+                f"Database cleared successfully!\n\n"
+                f"Deleted {record_count:,} records."
+            )
+            
+            # Refresh the view
+            self._refresh_data()
+            
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(
+                self,
+                "Error",
+                f"Failed to clear database:\n{e}"
+            )

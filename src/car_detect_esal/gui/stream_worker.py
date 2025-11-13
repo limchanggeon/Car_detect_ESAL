@@ -125,14 +125,16 @@ class StreamWorker(QtCore.QThread):
             # 탐지 수행
             annotated, results = self.detector.detect(frame, self.roi)
             
-            # 데이터베이스 저장을 위한 탐지 결과 처리
-            if results is not None and self.db_manager:
-                self._save_detections_to_db(results, original_frame_size)
-            
-            # 카운팅 로직 (roi가 있을 때만)
-            if self.roi and results is not None:
-                detections = self._extract_detections(results, self.roi)
-                updated_counts = self.tracker.update(detections)
+            # 탐지 결과를 추적 시스템에 전달하고 새로운 객체만 DB에 저장
+            if results is not None:
+                detections = self._extract_detections_with_bbox(results, original_frame_size)
+                
+                # 추적기 업데이트 - 새로운 객체만 반환
+                updated_counts, new_detections = self.tracker.update(detections)
+                
+                # 새로운 객체만 DB에 저장
+                if new_detections and self.db_manager:
+                    self._save_new_detections_to_db(new_detections)
                 
                 # 카운트 변경 시그널 방출
                 if updated_counts:
@@ -144,57 +146,17 @@ class StreamWorker(QtCore.QThread):
             print(f"[StreamWorker] 프레임 처리 오류: {e}")
             return frame
 
-    def _extract_detections(self, results, roi) -> list:
-        """YOLO 결과에서 탐지된 객체의 중심점과 클래스 추출"""
+    def _extract_detections_with_bbox(self, results, original_frame_size) -> list:
+        """YOLO 결과에서 탐지된 객체의 전체 정보 추출 (추적 및 DB 저장용)"""
         detections = []
         
         try:
             boxes = getattr(results[0], 'boxes', None)
             names = getattr(results[0], 'names', {})
             
-            if boxes is not None and hasattr(boxes, 'xyxy'):
-                xyxy = boxes.xyxy.tolist() if hasattr(boxes.xyxy, 'tolist') else []
-                cls_list = boxes.cls.tolist() if hasattr(boxes, 'cls') and hasattr(boxes.cls, 'tolist') else []
-                
-                for i, bbox in enumerate(xyxy):
-                    if len(bbox) < 4:
-                        continue
-                        
-                    x1, y1, x2, y2 = bbox[:4]
-                    cx = x1 + (x2 - x1) / 2.0
-                    cy = y1 + (y2 - y1) / 2.0
-                    
-                    # ROI 오프셋을 고려하여 원본 프레임 좌표로 변환
-                    orig_cx = roi[0] + cx
-                    orig_cy = roi[1] + cy
-                    
-                    # 클래스 이름 추출
-                    class_name = 'unknown'
-                    if i < len(cls_list):
-                        cls_idx = int(cls_list[i])
-                        class_name = str(names.get(cls_idx, 'unknown'))
-                    
-                    detections.append((orig_cx, orig_cy, class_name))
-                    
-        except Exception as e:
-            print(f"[StreamWorker] 탐지 추출 오류: {e}")
-        
-        return detections
-
-    def _save_detections_to_db(self, results, original_frame_size):
-        """탐지 결과를 데이터베이스에 저장"""
-        try:
-            if not self.db_manager or not results:
-                return
-                
-            boxes = getattr(results[0], 'boxes', None)
-            names = getattr(results[0], 'names', {})
-            
             if boxes is None or not hasattr(boxes, 'xyxy'):
-                return
+                return detections
                 
-            # 탐지 결과 추출
-            detections_for_db = []
             xyxy = boxes.xyxy.tolist() if hasattr(boxes.xyxy, 'tolist') else []
             cls_list = boxes.cls.tolist() if hasattr(boxes, 'cls') and hasattr(boxes.cls, 'tolist') else []
             conf_list = boxes.conf.tolist() if hasattr(boxes, 'conf') and hasattr(boxes.conf, 'tolist') else []
@@ -207,53 +169,73 @@ class StreamWorker(QtCore.QThread):
                     
                 x1, y1, x2, y2 = bbox[:4]
                 
-                # 정규화된 좌표로 변환 (0.0 ~ 1.0)
-                norm_x = (x1 + x2) / 2.0 / frame_width
-                norm_y = (y1 + y2) / 2.0 / frame_height
-                norm_width = (x2 - x1) / frame_width
-                norm_height = (y2 - y1) / frame_height
+                # 중심점 계산
+                cx = (x1 + x2) / 2.0
+                cy = (y1 + y2) / 2.0
                 
-                # 클래스 정보 추출
+                # ROI 오프셋 적용 (ROI가 있는 경우)
+                if self.roi:
+                    cx += self.roi[0]
+                    cy += self.roi[1]
+                
+                # 클래스 및 신뢰도
                 vehicle_class = int(cls_list[i]) if i < len(cls_list) else 0
                 vehicle_type = str(names.get(vehicle_class, 'unknown'))
                 confidence = float(conf_list[i]) if i < len(conf_list) else 0.0
                 
-                # 신뢰도가 낮은 탐지는 제외
+                # 낮은 신뢰도는 제외
                 if confidence < 0.5:
                     continue
                 
-                # 차량 타입 매핑 (YOLO 클래스를 표준 차량 타입으로 변환)
+                # 정규화된 좌표 계산 (0.0 ~ 1.0)
+                norm_x = cx / frame_width
+                norm_y = cy / frame_height
+                norm_width = (x2 - x1) / frame_width
+                norm_height = (y2 - y1) / frame_height
+                
+                # 차량 타입 매핑
                 vehicle_type_map = {
                     'car': 'car',
                     'motorcycle': 'motorbike',
                     'bus': 'bus',
                     'truck': 'truck',
-                    'bicycle': 'motorbike',  # 자전거는 오토바이로 분류
+                    'bicycle': 'motorbike',
                     'van': 'van'
                 }
                 
                 standardized_type = vehicle_type_map.get(vehicle_type.lower(), 'car')
                 
-                detection_data = {
+                # bbox 데이터
+                bbox_data = {
                     'vehicle_type': standardized_type,
                     'vehicle_class': vehicle_class,
-                    'confidence': confidence,
-                    'bbox': [norm_x, norm_y, norm_width, norm_height],
-                    'frame_number': self.fps_counter,
-                    'roi_id': None,  # ROI 기능 추가 시 설정
-                    'roi_name': None
+                    'bbox_x': norm_x,
+                    'bbox_y': norm_y,
+                    'bbox_width': norm_width,
+                    'bbox_height': norm_height
                 }
                 
-                detections_for_db.append(detection_data)
+                # (중심x, 중심y, 클래스명, 신뢰도, bbox데이터) 형태로 반환
+                detections.append((cx, cy, standardized_type, confidence, bbox_data))
+                    
+        except Exception as e:
+            print(f"[StreamWorker] 탐지 추출 오류: {e}")
+        
+        return detections
+
+    def _save_new_detections_to_db(self, new_detections):
+        """새로 발견된 객체만 DB에 저장 (중복 방지)"""
+        try:
+            if not self.db_manager or not new_detections:
+                return
             
-            # 탐지 결과를 버퍼에 추가
-            if detections_for_db:
-                self.detection_buffer.extend(detections_for_db)
+            # 버퍼에 추가
+            self.detection_buffer.extend(new_detections)
             
-            # 일정 시간마다 또는 버퍼가 가득 찰 때 데이터베이스에 저장
+            # 버퍼가 가득 차거나 일정 시간이 지나면 저장
             current_time = time.time()
-            buffer_full = len(self.detection_buffer) >= 50  # 50개씩 배치 저장
-            time_to_save = (current_time - self.last_db_save) >= 30  # 30초마다 저장
+            buffer_full = len(self.detection_buffer) >= 20  # 20개씩 배치 저장 (이전 50에서 감소)
+            time_to_save = (current_time - self.last_db_save) >= 10  # 10초마다 저장 (이전 30초에서 감소)
             
             if (buffer_full or time_to_save) and self.detection_buffer:
                 try:
@@ -266,15 +248,15 @@ class StreamWorker(QtCore.QThread):
                         saved_count = len(self.detection_buffer)
                         self.detection_buffer.clear()
                         self.last_db_save = current_time
-                        print(f"✅ 데이터베이스에 {saved_count}건 탐지 결과 저장 완료")
+                        print(f"[DB] ✅ {saved_count}개의 새로운 차량 저장 완료 (중복 제거됨)")
                     else:
-                        print("❌ 데이터베이스 저장 실패")
+                        print("[DB] ❌ 데이터베이스 저장 실패")
                         
                 except Exception as e:
-                    print(f"❌ 데이터베이스 저장 중 오류: {e}")
+                    print(f"[DB] 저장 중 오류: {e}")
                     
         except Exception as e:
-            print(f"[StreamWorker] 데이터베이스 저장 처리 오류: {e}")
+            print(f"[StreamWorker] DB 저장 처리 오류: {e}")
 
     def _frame_to_qimage(self, frame) -> Optional[QtGui.QImage]:
         """OpenCV 프레임을 QImage로 변환"""

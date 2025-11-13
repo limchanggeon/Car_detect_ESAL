@@ -103,60 +103,107 @@ class VehicleDetector:
 
 
 class VehicleTracker:
-    """간단한 차량 추적 클래스"""
+    """차량 추적 클래스 - 중복 저장 방지"""
     
-    def __init__(self, track_ttl: float = 1.0, match_threshold: float = 50.0):
+    def __init__(self, track_ttl: float = 3.0, match_threshold: float = 100.0):
+        """
+        Args:
+            track_ttl: 추적 유지 시간(초) - 객체가 이 시간동안 사라지면 추적 종료
+            match_threshold: 같은 객체로 판단하는 거리 임계값(픽셀)
+        """
         self.track_ttl = track_ttl
         self.match_threshold = match_threshold
-        self.tracks = []
-        self.count = 0
-        self.counts = {}
+        self.tracks = []  # 현재 추적 중인 객체들
+        self.count = 0  # 총 발견한 객체 수
+        self.counts = {}  # 클래스별 카운트
+        self.next_track_id = 0  # 다음 추적 ID
+        self.saved_track_ids = set()  # DB에 이미 저장된 추적 ID들
     
-    def update(self, detections: List[Tuple[float, float, str]]) -> Dict[str, int]:
+    def update(self, detections: List[Tuple[float, float, str, float, Dict]]) -> Tuple[Dict[str, int], List[Dict]]:
         """
-        탐지 결과로 추적 업데이트
+        탐지 결과로 추적 업데이트 및 새로운 객체만 반환
         
         Args:
-            detections: [(x, y, class_name), ...] 형태의 탐지 결과
+            detections: [(x, y, class_name, confidence, bbox_data), ...] 형태의 탐지 결과
             
         Returns:
-            클래스별 카운트 딕셔너리
+            (클래스별 카운트 딕셔너리, 새로 발견된 객체 리스트)
         """
         now = time.time()
+        new_detections = []  # DB에 저장할 새로운 객체들
         
-        # 만료된 추적 제거
+        # 만료된 추적 제거 (3초 이상 안 보인 객체)
         self.tracks = [t for t in self.tracks if now - t['last_seen'] < self.track_ttl]
         
-        for cx, cy, class_name in detections:
+        # 각 탐지 결과에 대해 처리
+        for detection_data in detections:
+            cx, cy, class_name, confidence, bbox_data = detection_data
             matched = False
+            matched_track = None
             
-            # 기존 추적과 매칭 시도
+            # 기존 추적과 매칭 시도 (가장 가까운 객체 찾기)
+            min_dist = float('inf')
             for track in self.tracks:
+                # 같은 클래스만 매칭
+                if track['class_name'] != class_name:
+                    continue
+                    
                 dx = track['pos'][0] - cx
                 dy = track['pos'][1] - cy
                 dist = math.hypot(dx, dy)
                 
-                if dist < self.match_threshold:
-                    track['pos'] = (cx, cy)
-                    track['last_seen'] = now
+                if dist < self.match_threshold and dist < min_dist:
+                    min_dist = dist
+                    matched_track = track
                     matched = True
-                    break
             
-            # 새로운 추적 생성
-            if not matched:
-                self.tracks.append({
+            # 기존 추적과 매칭된 경우 - 위치만 업데이트
+            if matched and matched_track:
+                matched_track['pos'] = (cx, cy)
+                matched_track['last_seen'] = now
+                matched_track['confidence'] = max(matched_track.get('confidence', 0), confidence)
+            
+            # 새로운 추적 생성 - 처음 보는 객체
+            else:
+                track_id = self.next_track_id
+                self.next_track_id += 1
+                
+                new_track = {
+                    'track_id': track_id,
                     'pos': (cx, cy),
-                    'last_seen': now
-                })
+                    'class_name': class_name,
+                    'confidence': confidence,
+                    'last_seen': now,
+                    'first_seen': now,
+                    'bbox_data': bbox_data
+                }
+                self.tracks.append(new_track)
                 
                 # 카운트 업데이트
                 self.counts[class_name] = self.counts.get(class_name, 0) + 1
                 self.count += 1
+                
+                # DB에 저장할 새로운 객체로 추가 (한 번만 저장)
+                if track_id not in self.saved_track_ids:
+                    detection_record = {
+                        'vehicle_type': bbox_data['vehicle_type'],
+                        'vehicle_class': bbox_data['vehicle_class'],
+                        'confidence': confidence,
+                        'bbox_x': bbox_data['bbox_x'],
+                        'bbox_y': bbox_data['bbox_y'],
+                        'bbox_width': bbox_data['bbox_width'],
+                        'bbox_height': bbox_data['bbox_height'],
+                        'track_id': track_id  # 추적 ID 추가
+                    }
+                    new_detections.append(detection_record)
+                    self.saved_track_ids.add(track_id)
         
-        return dict(self.counts)
+        return dict(self.counts), new_detections
     
     def reset(self):
         """추적 상태 리셋"""
         self.tracks.clear()
         self.count = 0
         self.counts.clear()
+        self.next_track_id = 0
+        self.saved_track_ids.clear()
